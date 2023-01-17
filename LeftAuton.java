@@ -11,8 +11,9 @@ public class LeftAuton extends LinearOpMode {
     public DcMotor BR, BL, FR, FL, linear;
     public Servo claw;
     public ColorSensor color;
-    double lpower = 0.1;
-    double wpower = 0.2;
+    double wpower = 0.1;
+    double lpower = 0.2;
+    double linearpower = 0.7;
 
     //clicks per degree
     double cpd = 3;
@@ -69,107 +70,165 @@ public class LeftAuton extends LinearOpMode {
         waitForStart();
 
         claw.setPosition(0.45);
-        linearup(12, 0.25);
         sleep(1000);
-        forward(21, 0.1);
+        linearup(12, 0.7);
+        sleep(1000);
+        forward(15, 0.1);
         sleep(2000);
         int x = 1;
         int y = 2;
         int z = 3;
-        if (color.blue() - 100 < color.red() && color.blue() + 100 > color.red())
-        //red (Position one)
             if (color.blue() - 100 < color.red() && color.blue() + 100 > color.red())
             //red (Position one)
             {
                 telemetry.addData("RED", x);
                 telemetry.update();
                     //go to high junction with loaded cone
-                forward(25,wpower);
-                right(90,lpower);
-                forward(3,wpower);
+                forward(26,wpower);
+                sleep(400);
+                right(45,lpower);
+                sleep(400);
+                forward(1.5,wpower);
+                sleep(400);
+
+
                     //drop loaded cone onto high junction
-                sleep(200);
-                //linearup(21.3,wpower);
-                forward(1,wpower);
-                sleep(200);
-                //lineardown(3,wpower);
+                linearup(21.5,linearpower);
+                sleep(400);
+                forward(2,wpower);
+                sleep(400);
+                lineardown(3,linearpower);
+                sleep(400);
                 claw.setPosition(0);
-                backward(1,wpower);
-                sleep(200);
-                //lineardown(30,wpower);
+                sleep(400);
+                backward(4,wpower);
+                sleep(400);
+                lineardown(23,linearpower);
+                sleep(400);
                 claw.setPosition(0.45);
-                    //go to cone stack 1
-                backward(1,wpower);
-                right(90,lpower);
-                forward(8,wpower);
-                right(90,lpower);
-                forward(35,wpower);
-                    //pick up cone 1
-                sleep(200);
-                //linearup(5,lpower);
-                forward(1,wpower);
-                claw.setPosition(0);
-                forward(1,wpower);
+                sleep(400);
+
+
+                    //go to cone stack 1 and pick up cone 1
+                left(135,lpower);
+                sleep(400);
+                forward(10,wpower);
+                sleep(400);
                 claw.setPosition(0.45);
+                sleep(400);
+
+
                     //go to high junction 1
                 backward(2,wpower);
+                sleep(400);
                 right(180,lpower);
+                sleep(400);
                 forward(36,wpower);
+                sleep(400);
                 left(90,lpower);
+                sleep(400);
                 forward(52,wpower);
+                sleep(400);
                 left(90,lpower);
+                sleep(400);
                 forward(38,wpower);
+                sleep(400);
                 right(90,lpower);
+                sleep(400);
+
+
                     //drop cone onto high junction 1
-                sleep(200);
-                //linearup(22.5,lpower);
+                linearup(22.5,linearpower);
+                sleep(400);
                 forward(1.5,lpower);
-                sleep(200);
-                lineardown(3,lpower);
+                sleep(400);
+                lineardown(3,linearpower);
+                sleep(400);
                 claw.setPosition(0);
+                sleep(400);
                 backward(1,wpower);
-                sleep(200);
-                //lineardown(33,lpower);
+                sleep(400);
+                lineardown(33,linearpower);
+                sleep(400);
                 claw.setPosition(0.45);
+                sleep(400);
+
+
                     //go to cone stack 2
                 backward(1,wpower);
+                sleep(400);
                 right(90,lpower);
+                sleep(400);
                 forward(11.75,wpower);
+                sleep(400);
                 right(90,lpower);
+                sleep(400);
                 forward(45,wpower);
+                sleep(400);
+
+
                     //pick up cone
-                sleep(200);
-                //linearup(5,lpower);
+                linearup(5,linearpower);
+                sleep(400);
                 forward(1,wpower);
+                sleep(400);
                 claw.setPosition(0);
+                sleep(400);
                 forward(1,wpower);
+                sleep(400);
                 claw.setPosition(0.45);
+                sleep(400);
+
+
                     //go to high junction 2
                 backward(2,wpower);
+                sleep(400);
                 right(180,lpower);
+                sleep(400);
                 forward(44,wpower);
+                sleep(400);
                 left(90,lpower);
+                sleep(400);
                 forward(10.5,wpower);
+                sleep(400);
                 left(90,lpower);
+                sleep(400);
                 forward(38,wpower);
+                sleep(400);
                 right(90,lpower);
+                sleep(400);
+
+
                     //drop cone onto high junction 2
-                sleep(200);
-                //linearup(22.5,lpower);
+                linearup(22.5,linearpower);
+                sleep(400);
                 forward(1.5,lpower);
-                sleep(200);
-                //lineardown(3,lpower);
+                sleep(400);
+                lineardown(3,linearpower);
+                sleep(400);
                 claw.setPosition(0);
-                backward(1,wpower);
-                sleep(200);
-                //lineardown(33,lpower);
+                sleep(400);
+                backward(2,wpower);
+                sleep(400);
+                lineardown(33,linearpower);
+                sleep(400);
                 claw.setPosition(0.45);
+                sleep(400);
+
+
                     //parking
                 right(180,lpower);
+                sleep(400);
                 forward(33.5,wpower);
+                sleep(400);
                 left(90,lpower);
+                sleep(400);
                 forward(24,wpower);
+                sleep(1000);
                 claw.setPosition(0);
+                sleep(1000);
+
+
                 //stop
                 BR.setPower(0);
                 FR.setPower(0);
@@ -407,6 +466,9 @@ public class LeftAuton extends LinearOpMode {
             linear.setPower(0.2);
         } else if (inch >= 18) {
             linear.setPower(0.3);
+        } else if (inch >= 26)
+        {
+            linear.setPower(0.4);
         }
     }
 
