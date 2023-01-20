@@ -11,7 +11,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
 @Autonomous
-public class BlazinColorTest extends LinearOpMode
+public class BlazinColorAuton extends LinearOpMode
 {
     public DcMotor BR, BL, FR, FL,linear;
     public Servo claw;
