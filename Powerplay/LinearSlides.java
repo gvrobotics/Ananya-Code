@@ -5,7 +5,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 @TeleOp
-public class Servo extends OpMode {
+public class LinearSlides extends OpMode {
     public com.qualcomm.robotcore.hardware.Servo claw;
     public DcMotor linear;
 
