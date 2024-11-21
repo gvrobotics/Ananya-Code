@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
 @Autonomous
-public class EncTest extends LinearOpMode
+public class EncoderValueTest extends LinearOpMode
 {
     DcMotor motor;
     private double cpi;
