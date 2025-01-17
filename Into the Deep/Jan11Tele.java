@@ -7,7 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 
 @TeleOp (name = "Tele5440")
-public class Tele5440 extends OpMode
+public class Jan11Tele extends OpMode
 {
     public DcMotor FR, FL, BR, BL, VSlideR, VSlideL;
     private Servo CControl, CRotate, CArm, ElbowR, ElbowL;
