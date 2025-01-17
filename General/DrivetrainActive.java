@@ -5,7 +5,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
-@TeleOp (name = "Drivetrain Active")
+@TeleOp
 public class DrivetrainActive extends OpMode {
     private double powerLX, powerLY, powerRX, powerRY, robotAngle, PowerMultiplier, lf, rb, rf, lb;
     private DcMotor FL, BL, FR, BR;
