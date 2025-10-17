@@ -79,10 +79,10 @@ public class Holo_Explain extends OpMode {
         // Combines joystick movement and rotation
         //Pi/4 is used because each wheel is mounted at a 45 degree angle
         // Power RX is added/subtracted to each motor so the robot can spin while moving (+ is right, - is left)
-        lf = (PowerMultiplier * -1 * (Math.sin(robotAngle - (Math.PI / 4)))) - powerRX;
-        rb = (PowerMultiplier * -1 * (Math.sin(robotAngle - (Math.PI / 4)))) + powerRX;
-        lb = (PowerMultiplier * Math.sin(robotAngle + (Math.PI / 4))) - powerRX;
-        rf = (PowerMultiplier * Math.sin(robotAngle + (Math.PI / 4))) + powerRX;
+        lf = (PowerMultiplier*(Math.sin(robotAngle+(Math.PI/4)))) - powerRX;
+        rb = (PowerMultiplier*(Math.sin(robotAngle+(Math.PI/4)))) + powerRX;
+        lb = (PowerMultiplier*-1*(Math.sin(robotAngle-(Math.PI/4)))) - powerRX;
+        rf = (PowerMultiplier*-1*(Math.sin(robotAngle-(Math.PI/4)))) + powerRX;
 
         // Apply calculated powers to each motor
         BR.setPower(rb);
