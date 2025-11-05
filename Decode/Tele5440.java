@@ -68,20 +68,21 @@ public class Tele5440 extends OpMode {
         FR.setPower(rf);
         FL.setPower(lf);
 
-        // Intake
+        // OUTTAKE
+        // flip
         if (gamepad1.right_bumper && !t) {
-            // When Y is pressed, flip down
+            // When right bumper is pressed, flip down
             flip.setPosition(0.2);
             timer.reset();
             t = true;
         } else if (t && !gamepad1.right_bumper && timer.seconds() > 0.3) {
-            // After Y is released for 0.1s, flip back up
+            // After right bumper is released for 0.3s, flip back up
             flip.setPosition(0);
             t = false;
         }
 
-        
-        //TOGGLE
+        // TOGGLE FOR SHOOTER
+
         // Stores the previous state of the button
         previousGamepad = currentGamepad;
         // Read the current state of bumper
