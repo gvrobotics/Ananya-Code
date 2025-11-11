@@ -2,12 +2,9 @@ package org.firstinspires.ftc.teamcode.Tele;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.util.ElapsedTime;
 
-@TeleOp (name = "Servo Test Forward", group = "Servo")
+@TeleOp (name = "Servo Test", group = "Test")
 public class ServoTest extends OpMode {
     private Servo servo;
 
@@ -26,7 +23,7 @@ public class ServoTest extends OpMode {
             servo.setPosition(0);
         }
         if (gamepad1.right_bumper) {
-            servo.setPosition(1);
+            servo.setPosition(0.1);
         }
         if (gamepad1.dpad_up) {
             servo.setPosition(0.2);
