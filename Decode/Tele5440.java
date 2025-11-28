@@ -1,19 +1,22 @@
 package org.firstinspires.ftc.teamcode.Tele;
-
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-@TeleOp (name = "TeleOp 5440", group = "Tele")
+@TeleOp (name = "Dec 6th Tele", group = "Tele")
 public class Tele5440 extends OpMode {
-    public DcMotor BR, BL, FR, FL, spin1, spin2;
-    private double powerRY, powerRX, powerLX, powerLY, robotAngle, PowerMultiplier, lf, rb, rf, lb;
-    private Servo flip;
-    private ElapsedTime timer = new ElapsedTime();
-    private Boolean motorOn = false, t = false, previousGamepad = false, currentGamepad = false;
+    public DcMotor BR, BL, FR, FL, intake, shooter;
+    public CRServo spin1, spin2;
+    private double powerRX, powerLX, powerLY, robotAngle, PowerMultiplier, lf, rb, rf, lb;
+    //private ElapsedTime timer = new ElapsedTime();
+    //private Boolean t = false;
+    private Boolean motorOn = false, previousGamepad = false, currentGamepad = false;
+    private Boolean motorOn2 = false, previousGamepad2 = false, currentGamepad2 = false;
+    private Boolean motorOn3 = false, previousGamepad3 = false, currentGamepad3 = false;
+
 
     @Override
     public void init() {
@@ -21,32 +24,35 @@ public class Tele5440 extends OpMode {
         BL = hardwareMap.get(DcMotor.class, "BL");
         FR = hardwareMap.get(DcMotor.class, "FR");
         FL = hardwareMap.get(DcMotor.class, "FL");
-        spin1 = hardwareMap.get(DcMotor.class, "s1");
-        spin2 = hardwareMap.get(DcMotor.class, "s2");
-        flip = hardwareMap.get(Servo.class, "f");
+        intake = hardwareMap.get(DcMotor.class, "i");
+        shooter = hardwareMap.get(DcMotor.class, "s");
+        spin1 = hardwareMap.get(CRServo.class, "s1");
+        spin2 = hardwareMap.get(CRServo.class, "s2");
 
         BR.setDirection(DcMotorSimple.Direction.REVERSE);
         BL.setDirection(DcMotorSimple.Direction.FORWARD);
         FR.setDirection(DcMotorSimple.Direction.REVERSE);
         FL.setDirection(DcMotorSimple.Direction.FORWARD);
-        spin1.setDirection(DcMotorSimple.Direction.FORWARD);
-        spin2.setDirection(DcMotorSimple.Direction.REVERSE);
-        flip.setDirection(Servo.Direction.FORWARD);
+        intake.setDirection(DcMotorSimple.Direction.REVERSE);
+        shooter.setDirection(DcMotorSimple.Direction.REVERSE);
+        spin1.setDirection(CRServo.Direction.FORWARD);
+        spin2.setDirection(CRServo.Direction.FORWARD);
 
         BR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         BL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         FR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         FL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        spin1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        spin2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         BR.setPower(0);
         BL.setPower(0);
         FR.setPower(0);
         FL.setPower(0);
+        intake.setPower(0);
+        shooter.setPower(0);
         spin1.setPower(0);
         spin2.setPower(0);
-        flip.setPosition(0);
     }
 
     @Override
@@ -68,7 +74,55 @@ public class Tele5440 extends OpMode {
         FR.setPower(rf);
         FL.setPower(lf);
 
-        // OUTTAKE
+        // TOGGLE FOR INTAKE
+
+        previousGamepad = currentGamepad;
+        currentGamepad = gamepad1.left_bumper;
+
+        if (currentGamepad && !previousGamepad) {
+            motorOn = !motorOn;
+            if (motorOn) {
+                intake.setPower(0.7);
+            } else {
+                intake.setPower(0);
+            }
+        }
+
+
+        // TOGGLE FOR SERVO
+
+        previousGamepad3 = currentGamepad3;
+        currentGamepad3 = gamepad1.a;
+
+        if (currentGamepad3 && !previousGamepad3) {
+            motorOn3 = !motorOn3;
+            if (motorOn3) {
+                spin1.setPower(0.5);
+                spin2.setPower(0.5);
+            } else {
+                spin1.setPower(0);
+                spin2.setPower(0);
+            }
+        }
+
+        // TOGGLE FOR SHOOTER
+
+        previousGamepad2 = currentGamepad2;
+        currentGamepad2 = gamepad1.right_bumper;
+
+        if (currentGamepad2 && !previousGamepad2) {
+            motorOn2 = !motorOn2;
+            if (motorOn2) {
+                shooter.setPower(0.7);
+            } else {
+                shooter.setPower(0);
+            }
+        }
+
+
+        // ELAPSED TIMER CODE
+
+        /*
         // flip
         if (gamepad1.right_bumper && !t) {
             // When right bumper is pressed, flip down
@@ -79,26 +133,9 @@ public class Tele5440 extends OpMode {
             // After right bumper is released for 0.3s, flip back up
             flip.setPosition(0);
             t = false;
+            gamepad1.rumbleBlips(2);
         }
-
-        // TOGGLE FOR SHOOTER
-
-        // Stores the previous state of the button
-        previousGamepad = currentGamepad;
-        // Read the current state of bumper
-        currentGamepad = gamepad1.left_bumper;
-
-        // Checks if the button was just pressed
-        if (currentGamepad && !previousGamepad) {
-            motorOn = !motorOn;
-            if (motorOn) {
-                spin1.setPower(0.45);
-                spin2.setPower(0.45);
-            } else {
-                spin1.setPower(0);
-                spin2.setPower(0);
-            }
-        }
+        */
 
         telemetry.addData("Robot angle:", robotAngle);
         telemetry.addData("powerRX: ", gamepad1.right_stick_x);
@@ -110,10 +147,13 @@ public class Tele5440 extends OpMode {
         telemetry.addData("BL: ", BL.getPower());
         telemetry.addData("FR: ", FR.getPower());
         telemetry.addData("FL: ", FL.getPower());
-        telemetry.addData("spin1: ", spin1.getPower());
-        telemetry.addData("spin2: ", spin2.getPower());
-        telemetry.addData("flip: ", flip.getPosition());
-        telemetry.addData("Outtake On: ", motorOn);
+        telemetry.addData("Intake: ", intake.getPower());
+        telemetry.addData("Shooter: ", shooter.getPower());
+        telemetry.addData("Servo 1: ", spin1.getPower());
+        telemetry.addData("Servo 2: ", spin2.getPower());
+        telemetry.addData("Intake On: ", motorOn);
+        telemetry.addData("Shooter On: ", motorOn2);
+        telemetry.addData("Servos On: ", motorOn3);
         telemetry.update();
     }
 }
