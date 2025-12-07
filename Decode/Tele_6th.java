@@ -7,7 +7,7 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 @TeleOp (name = "Dec 6th Tele", group = "Tele")
-public class Tele5440 extends OpMode {
+public class Tele_6th extends OpMode {
     public DcMotor BR, BL, FR, FL, intake, shooter;
     public CRServo spin1, spin2;
     private double powerRX, powerLX, powerLY, robotAngle, PowerMultiplier, lf, rb, rf, lb;
@@ -35,7 +35,7 @@ public class Tele5440 extends OpMode {
         FL.setDirection(DcMotorSimple.Direction.FORWARD);
         intake.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter.setDirection(DcMotorSimple.Direction.REVERSE);
-        spin1.setDirection(CRServo.Direction.FORWARD);
+        spin1.setDirection(CRServo.Direction.REVERSE);
         spin2.setDirection(CRServo.Direction.FORWARD);
 
         BR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -57,17 +57,17 @@ public class Tele5440 extends OpMode {
 
     @Override
     public void loop() {
-        powerLX = gamepad1.left_stick_x;
-        powerLY = gamepad1.left_stick_y;
-        powerRX = gamepad1.right_stick_x;
+        powerRX = -gamepad1.left_stick_x;
+        powerLY = gamepad1.left_stick_y/1.2;
+        powerLX = gamepad1.right_stick_x/1.2;
 
         robotAngle = Math.atan2(powerLX, powerLY);
         PowerMultiplier = Math.sqrt((Math.pow(powerLX, 2) + Math.pow(powerLY, 2)));
 
-        lf = (PowerMultiplier * (Math.sin(robotAngle + (Math.PI / 4)))) - powerRX;
-        rb = (PowerMultiplier * (Math.sin(robotAngle + (Math.PI / 4)))) + powerRX;
-        lb = (PowerMultiplier * -1 * (Math.sin(robotAngle - (Math.PI / 4)))) - powerRX;
-        rf = (PowerMultiplier * -1 * (Math.sin(robotAngle - (Math.PI / 4)))) + powerRX;
+        lf = (PowerMultiplier * (Math.sin(robotAngle + (Math.PI / 4)))) + powerRX;
+        rb = (PowerMultiplier * (Math.sin(robotAngle + (Math.PI / 4)))) - powerRX;
+        lb = (PowerMultiplier * -1 * (Math.sin(robotAngle - (Math.PI / 4)))) + powerRX;
+        rf = (PowerMultiplier * -1 * (Math.sin(robotAngle - (Math.PI / 4)))) - powerRX;
 
         BR.setPower(rb);
         BL.setPower(lb);
@@ -92,13 +92,13 @@ public class Tele5440 extends OpMode {
         // TOGGLE FOR SERVO
 
         previousGamepad3 = currentGamepad3;
-        currentGamepad3 = gamepad1.a;
+        currentGamepad3 = gamepad1.x;
 
         if (currentGamepad3 && !previousGamepad3) {
             motorOn3 = !motorOn3;
             if (motorOn3) {
-                spin1.setPower(0.5);
-                spin2.setPower(0.5);
+                spin1.setPower(0.8);
+                spin2.setPower(0.8);
             } else {
                 spin1.setPower(0);
                 spin2.setPower(0);
