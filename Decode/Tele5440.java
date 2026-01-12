@@ -48,6 +48,8 @@ public class Tele5440 extends OpMode {
 
         fly1.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         fly2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        fly1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        fly2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         PIDFCoefficients pidfCoeffs = new PIDFCoefficients(0.2, 0, 0, 14);
         fly1.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoeffs);
         fly2.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoeffs);
@@ -72,7 +74,7 @@ public class Tele5440 extends OpMode {
         intake1.setPower(0);
         intake2.setPower(0);
         push1.setPosition(0.5);
-        launch.setPosition(0.7);
+        launch.setPosition(0.9);
     }
 
     @Override
@@ -129,9 +131,9 @@ public class Tele5440 extends OpMode {
         if (currentGamepad3 && !previousGamepad3) {
             pushOn = !pushOn;
             if (pushOn) {
-                push1.setPosition(0.5);
+                push1.setPosition(0.5); //down
             } else {
-                push1.setPosition(0.1);
+                push1.setPosition(0.1); //up
             }
         }
 
@@ -143,20 +145,20 @@ public class Tele5440 extends OpMode {
             intake2.setVelocity(0);
             timer.reset();
             t = true;
-        } else if (t && !gamepad1.b && timer.seconds() > 0.5) {
-            // After b is released for 0.5s, flip back down and intake on wait 2 secs then off
+        } else if (t && !gamepad1.b && timer.seconds() > 2) {
+            // After b is released for 2s, flip back down and intake on
             push1.setPosition(0.5);
-            if (!t2) {
-                intake1.setVelocity(1500);
-                intake2.setVelocity(1500);
-                timer2.reset();
-                t2 = true;
-            } else if (t2 && timer2.seconds() > 1) {
-                intake1.setVelocity(0);
-                intake2.setVelocity(0);
-                t2 = false;
-            }
+            intake1.setVelocity(1500);
+            intake2.setVelocity(1500);
+            timer2.reset();
+            t2 = true;
             t = false;
+        }
+        // turning off intake after 2s
+        if (t2 && timer2.seconds() > 2) {
+            intake1.setVelocity(0);
+            intake2.setVelocity(0);
+            t2 = false;
         }
 
         // TOGGLE FOR Launch - b
@@ -177,14 +179,8 @@ public class Tele5440 extends OpMode {
         telemetry.addData("powerLX: ", gamepad1.left_stick_x);
         telemetry.addData("powerLY: ", gamepad1.left_stick_y);
 
-        telemetry.addData("BR: ", BR.getPower());
-        telemetry.addData("BL: ", BL.getPower());
-        telemetry.addData("FR: ", FR.getPower());
-        telemetry.addData("FL: ", FL.getPower());
         telemetry.addData("Fly1: ", fly1.getVelocity());
         telemetry.addData("Fly2: ", fly2.getVelocity());
-        telemetry.addData("Fly1p: ", fly1.getPower());
-        telemetry.addData("Fly2p: ", fly2.getPower());
         telemetry.addData("Flywheel On: ", shooterOn);
         telemetry.addData("Intake1: ", intake1.getVelocity());
         telemetry.addData("Intake2: ", intake2.getVelocity());
@@ -192,6 +188,11 @@ public class Tele5440 extends OpMode {
         telemetry.addData("Push1: ", push1.getPosition());
         // telemetry.addData("Push2: ", push2.getPosition());
         telemetry.addData("Launch: ", launch.getPosition());
+        
+        telemetry.addData("BR: ", BR.getPower());
+        telemetry.addData("BL: ", BL.getPower());
+        telemetry.addData("FR: ", FR.getPower());
+        telemetry.addData("FL: ", FL.getPower());
         telemetry.update();
     }
 }
