@@ -1,4 +1,5 @@
 package org.firstinspires.ftc.teamcode.Tele;
+
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -8,7 +9,7 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-@TeleOp (name = "Tele 5440", group = "Tele")
+@TeleOp (name = "Tele 5440", group = "A")
 public class Tele5440 extends OpMode {
     public DcMotor BR, BL, FR, FL;
     public DcMotorEx fly1, fly2, intake1, intake2;
@@ -19,9 +20,20 @@ public class Tele5440 extends OpMode {
     private Boolean launchOn = false, previousGamepad4 = false, currentGamepad4 = false;
 
 
+    private boolean prevA = false;
+    private boolean prevB = false;
+
+    // State machine
+    private enum LaunchState {
+        IDLE,
+        PUSH_FORWARD,
+        PUSH_BACK,
+        INTAKE_ON
+    }
+
+    private LaunchState launchState = LaunchState.IDLE;
     private ElapsedTime timer = new ElapsedTime();
-    private ElapsedTime timer2 = new ElapsedTime();
-    private Boolean t2 = false;
+
 
     @Override
     public void init() {
@@ -48,13 +60,16 @@ public class Tele5440 extends OpMode {
 
         fly1.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         fly2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        fly1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        fly2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         PIDFCoefficients pidfCoeffs = new PIDFCoefficients(0.2, 0, 0, 14);
         fly1.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoeffs);
         fly2.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoeffs);
+        fly1.setVelocityPIDFCoefficients(0.2, 0, 0, 14);
+        fly2.setVelocityPIDFCoefficients(0.2, 0, 0, 14);
         intake1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         intake2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        fly1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        fly2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
 
         BR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         BL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -74,7 +89,7 @@ public class Tele5440 extends OpMode {
         intake1.setPower(0);
         intake2.setPower(0);
         push1.setPosition(0.5);
-        launch.setPosition(0.9);
+        launch.setPosition(0.7);
     }
 
     @Override
@@ -125,43 +140,82 @@ public class Tele5440 extends OpMode {
         }
 
         // TOGGLE FOR Push - a
-        previousGamepad3 = currentGamepad3;
-        currentGamepad3 = gamepad1.a;
+        boolean currentA = gamepad1.a;
 
-        if (currentGamepad3 && !previousGamepad3) {
-            pushOn = !pushOn;
-            if (pushOn) {
-                push1.setPosition(0.5); //down
-            } else {
-                push1.setPosition(0.1); //up
+        // Only allow A toggle if not launching
+        if (launchState == LaunchState.IDLE) {
+            if (currentA && !prevA) {
+                pushOn = !pushOn;
+                if (pushOn) {
+                    push1.setPosition(0.5); // up
+                } else {
+                    push1.setPosition(0.1); // down
+                }
             }
         }
+        prevA = currentA;
+
+        // More than two timed steps = separate each segment or use a state machine
+        // Booleans will not work here
 
         // LAUNCH - b
-        if (gamepad1.b && !t) {
-            // When b is pressed, flip up and intake off
+        boolean currentB = gamepad1.b;
+
+        // Start launch sequence on B tap if IDLE
+        if (currentB && !prevB && launchState == LaunchState.IDLE) {
+            // Stop intake
+            intake1.setVelocity(0);
+            intake2.setVelocity(0);
+            intakeOn = false;
+
+            // Pusher up
             push1.setPosition(0.1);
-            intake1.setVelocity(0);
-            intake2.setVelocity(0);
+
+            // Start state machine
             timer.reset();
-            t = true;
-        } else if (t && !gamepad1.b && timer.seconds() > 2) {
-            // After b is released for 2s, flip back down and intake on
-            push1.setPosition(0.5);
-            intake1.setVelocity(1500);
-            intake2.setVelocity(1500);
-            timer2.reset();
-            t2 = true;
-            t = false;
-        }
-        // turning off intake after 2s
-        if (t2 && timer2.seconds() > 2) {
-            intake1.setVelocity(0);
-            intake2.setVelocity(0);
-            t2 = false;
+            launchState = LaunchState.PUSH_FORWARD;
         }
 
-        // TOGGLE FOR Launch - b
+        prevB = currentB;
+
+        // State machine
+        switch (launchState) {
+
+            case PUSH_FORWARD:
+                if (timer.seconds() >= 0.7) {
+                    // Pusher down
+                    push1.setPosition(0.5);
+                    timer.reset();
+                    launchState = LaunchState.PUSH_BACK;
+                }
+                break;
+
+            case PUSH_BACK:
+                if (timer.seconds() >= 0.7) {
+                    // Turn intake on
+                    intake1.setVelocity(1500);
+                    intake2.setVelocity(1500);
+                    timer.reset();
+                    launchState = LaunchState.INTAKE_ON;
+                }
+                break;
+
+            case INTAKE_ON:
+                if (timer.seconds() >= 0.2) {
+                    // Stop intake
+                    intake1.setVelocity(0);
+                    intake2.setVelocity(0);
+                    launchState = LaunchState.IDLE;
+                }
+                break;
+
+            case IDLE:
+            default:
+                break; // Nothing
+        }
+
+
+        // TOGGLE FOR Launch servo - x
         previousGamepad4 = currentGamepad4;
         currentGamepad4 = gamepad1.x;
 
@@ -174,25 +228,30 @@ public class Tele5440 extends OpMode {
             }
         }
 
-
-        telemetry.addData("powerRX: ", gamepad1.right_stick_x);
-        telemetry.addData("powerLX: ", gamepad1.left_stick_x);
-        telemetry.addData("powerLY: ", gamepad1.left_stick_y);
-
         telemetry.addData("Fly1: ", fly1.getVelocity());
         telemetry.addData("Fly2: ", fly2.getVelocity());
+        telemetry.addData("Fly1p: ", fly1.getPower());
+        telemetry.addData("Fly2p: ", fly2.getPower());
         telemetry.addData("Flywheel On: ", shooterOn);
+        telemetry.addLine();
         telemetry.addData("Intake1: ", intake1.getVelocity());
         telemetry.addData("Intake2: ", intake2.getVelocity());
         telemetry.addData("Intake On: ", intakeOn);
+        telemetry.addLine();
         telemetry.addData("Push1: ", push1.getPosition());
+        telemetry.addData("Push On: ", pushOn);
         // telemetry.addData("Push2: ", push2.getPosition());
         telemetry.addData("Launch: ", launch.getPosition());
-        
+        telemetry.addData("Launch On: ", launchOn);
+        telemetry.addLine();
         telemetry.addData("BR: ", BR.getPower());
         telemetry.addData("BL: ", BL.getPower());
         telemetry.addData("FR: ", FR.getPower());
         telemetry.addData("FL: ", FL.getPower());
+        telemetry.addData("powerRX: ", gamepad1.right_stick_x);
+        telemetry.addData("powerLX: ", gamepad1.left_stick_x);
+        telemetry.addData("powerLY: ", gamepad1.left_stick_y);
+        telemetry.addLine();
         telemetry.update();
     }
 }
