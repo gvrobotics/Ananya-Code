@@ -319,6 +319,19 @@ public class Tele5440 extends OpMode {
             launch.setPosition(launchOn ? 1 : 0.5);
         }
 
+//        if (gamepad1.dpadUpWasPressed()) {
+//            launch.setPosition(launch.getPosition() + 0.01);
+//        }
+//        if (gamepad1.dpadDownWasPressed()) {
+//            launch.setPosition(launch.getPosition() - 0.01);
+//        }
+//        if (gamepad1.dpadRightWasPressed()) {
+//            launch.setPosition(launch.getPosition() + 0.1);
+//        }
+//        if (gamepad1.dpadLeftWasPressed()) {
+//            launch.setPosition(launch.getPosition() - 0.1);
+//        }
+
         // ===== INTAKE DIRECTION TOGGLE (Left bumper on 2) =====
         prevLB2 = currLB2;
         currLB2 = gamepad2.left_bumper;
