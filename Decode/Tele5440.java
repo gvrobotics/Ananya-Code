@@ -15,18 +15,15 @@ import org.firstinspires.ftc.teamcode.Odo.GoBildaPinpointDriver;
 
 @TeleOp (name = "Tele 5440", group = "A")
 public class Tele5440 extends OpMode {
-    public DcMotor BR, BL, FR, FL;
     public DcMotorEx fly1, fly2, intake1, intake2;
     public Servo push1, push2, launch;
-    GoBildaPinpointDriver odo;
-
     private Boolean intakeOn = false, prevLB1 = false, currLB1,
             intakeDirection = false, prevLB2 = false, currLB2,
             shooterOn = false, prevRB1 = false, currRB1, flywheelReady = false,
             launchOn = false, prevY2 = false, currY2,
             pushOn = false, prevA2 = false, currA2,
             prevB = false, currB, prevX = false, currX,
-            fieldCentricMode = true, prevY = false, currY;
+            fieldCentricMode = true;
     private int shotsRemaining = 0;
     double TARGET_VELOCITY = 960;
     private double P = 0.212, F = 12.199;
@@ -42,14 +39,12 @@ public class Tele5440 extends OpMode {
 
     private LaunchState launchState = LaunchState.IDLE;
     private ElapsedTime timer = new ElapsedTime();
+    Drive robot;
 
     @Override
     public void init() {
         // Initialize drive motors
-        BR = hardwareMap.get(DcMotor.class, "BR");
-        BL = hardwareMap.get(DcMotor.class, "BL");
-        FR = hardwareMap.get(DcMotor.class, "FR");
-        FL = hardwareMap.get(DcMotor.class, "FL");
+        robot = new Drive(hardwareMap);
 
         // Initialize mechanism motors
         fly1 = hardwareMap.get(DcMotorEx.class, "f1");
@@ -62,12 +57,7 @@ public class Tele5440 extends OpMode {
         push2 = hardwareMap.get(Servo.class, "p2");
         launch = hardwareMap.get(Servo.class, "l");
 
-        // Initialize odometry
-        odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
-
         // Set motor directions
-        BL.setDirection(DcMotorSimple.Direction.REVERSE);
-        FL.setDirection(DcMotorSimple.Direction.REVERSE);
         fly1.setDirection(DcMotorSimple.Direction.REVERSE);
         fly2.setDirection(DcMotorSimple.Direction.REVERSE);
         intake1.setDirection(DcMotorSimple.Direction.FORWARD);
@@ -84,20 +74,12 @@ public class Tele5440 extends OpMode {
         fly2.setVelocityPIDFCoefficients(P, 0, 0, F);
 
         // Set all motors to brake when power is zero
-        BR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        BL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        FR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        FL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         fly1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         fly2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         intake1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         intake2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         // Initialize all motors to zero power
-        BR.setPower(0);
-        BL.setPower(0);
-        FR.setPower(0);
-        FL.setPower(0);
         fly1.setPower(0);
         fly2.setPower(0);
         intake1.setVelocity(0);
@@ -105,71 +87,11 @@ public class Tele5440 extends OpMode {
         push1.setPosition(0.4);
         push2.setPosition(0); //push 1 (R) - down is 0.4, up is 0.7 == push 2 (F) - down is 0, up is 0.25
         launch.setPosition(0.5);
-
-        // ===== ODOMETRY CONFIGURATION =====
-        odo.setOffsets(-4.33, -3.5, DistanceUnit.INCH);
-        odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        odo.setEncoderDirections(
-                GoBildaPinpointDriver.EncoderDirection.REVERSED,
-                GoBildaPinpointDriver.EncoderDirection.REVERSED
-        );
-
-        // Reset and set starting position
-        odo.resetPosAndIMU();
-        Pose2D startingPosition = new Pose2D(DistanceUnit.MM, -923.925, 1601.47, AngleUnit.RADIANS, 0);
-        odo.setPosition(startingPosition);
     }
 
     @Override
     public void loop() {
-        // MUST be called every loop for field-centric to work
-        odo.update();
-
-        // ===== TOGGLE DRIVE =====
-        prevY = currY;
-        currY = gamepad1.y;
-        if (currY && !prevY) {
-            fieldCentricMode = !fieldCentricMode;
-        }
-
-        // ===== DRIVE CONTROL =====
-        double y = -gamepad1.left_stick_y;
-        double x = -gamepad1.left_stick_x * 1.1;
-        double rx = gamepad1.right_stick_x;
-        double br, bl, fr, fl;
-
-        if (fieldCentricMode) {
-            // FIELD-CENTRIC
-            // Get robot heading from odometry
-            Pose2D pos = odo.getPosition();
-            double heading = pos.getHeading(AngleUnit.RADIANS);
-
-            double rotationAngle = (0) - heading;
-            double cosAngle = Math.cos(rotationAngle);
-            double sinAngle = Math.sin(rotationAngle);
-
-            // Rotate the movement vector by the robot's heading
-            double globalStrafe = -y * sinAngle + x * cosAngle;
-            double globalForward = y * cosAngle + x * sinAngle;
-
-            // Calculate mecanum wheel powers with field-centric adjustments
-            fl = globalForward + globalStrafe + rx;
-            fr = globalForward - globalStrafe - rx;
-            bl = globalForward - globalStrafe + rx;
-            br = globalForward + globalStrafe - rx;
-        } else {
-            // ROBOT-CENTRIC
-            fl = y + x + rx;
-            fr = y - x - rx;
-            bl = y - x + rx;
-            br = y + x - rx;
-        }
-
-        // Set motor powers
-        BR.setPower(br);
-        BL.setPower(bl);
-        FR.setPower(fr);
-        FL.setPower(fl);
+        robot.update(gamepad1);
 
         // ===== INTAKE TOGGLE (Left Bumper) =====
         prevLB1 = currLB1;
@@ -223,8 +145,8 @@ public class Tele5440 extends OpMode {
             shotsRemaining = 3;
 
             // Stop intake
-            intake1.setPower(0);
-            intake2.setPower(0);
+            intake1.setVelocity(0);
+            intake2.setVelocity(0);
             intakeOn = false;
 
             // Pusher up
@@ -269,15 +191,15 @@ public class Tele5440 extends OpMode {
             case PUSH_BACK:
                 if (timer.seconds() >= 0.2) {
                     // Turn intake on
-                    intake1.setVelocity(1000);
-                    intake2.setVelocity(1000);
+                    intake1.setVelocity(800);
+                    intake2.setVelocity(800);
                     timer.reset();
                     launchState = LaunchState.INTAKE_ON;
                 }
                 break;
 
             case INTAKE_ON:
-                if (timer.seconds() >= 0.2) {
+                if (timer.seconds() >= 0.5) {
                     shotsRemaining--;
                     // Stop intake
                     intake1.setVelocity(0);
@@ -306,7 +228,7 @@ public class Tele5440 extends OpMode {
         // Only allow A toggle if not in launch sequence
         if (launchState == LaunchState.IDLE && currA2 && !prevA2) {
             pushOn = !pushOn;
-            push1.setPosition(pushOn ? pushUp1 : pushDown1); // up - down
+            push1.setPosition(pushOn ? pushUp1 : pushDown1);
             push2.setPosition(pushOn ? pushUp2 : pushDown2);
         }
 
@@ -319,18 +241,6 @@ public class Tele5440 extends OpMode {
             launch.setPosition(launchOn ? 1 : 0.5);
         }
 
-//        if (gamepad1.dpadUpWasPressed()) {
-//            launch.setPosition(launch.getPosition() + 0.01);
-//        }
-//        if (gamepad1.dpadDownWasPressed()) {
-//            launch.setPosition(launch.getPosition() - 0.01);
-//        }
-//        if (gamepad1.dpadRightWasPressed()) {
-//            launch.setPosition(launch.getPosition() + 0.1);
-//        }
-//        if (gamepad1.dpadLeftWasPressed()) {
-//            launch.setPosition(launch.getPosition() - 0.1);
-//        }
 
         // ===== INTAKE DIRECTION TOGGLE (Left bumper on 2) =====
         prevLB2 = currLB2;
@@ -342,7 +252,7 @@ public class Tele5440 extends OpMode {
 
         // ===== TELEMETRY =====
         // Drive mode indicator
-        telemetry.addData("DRIVE MODE", fieldCentricMode ? "FIELD-CENTRIC" : "ROBOT-CENTRIC");
+        telemetry.addData("DRIVE MODE", robot.fieldCentric ? "FIELD-CENTRIC" : "ROBOT-CENTRIC");
         telemetry.addLine();
 
         telemetry.addLine("========STATE========");
@@ -371,17 +281,17 @@ public class Tele5440 extends OpMode {
         // Drive motor info
         // Odometry position (only shown in field-centric mode)
         if (fieldCentricMode) {
-            Pose2D pos = odo.getPosition();
+            Pose2D pos = robot.odo.getPosition();
             telemetry.addData("Robot X", pos.getX(DistanceUnit.MM));
             telemetry.addData("Robot Y", pos.getY(DistanceUnit.MM));
             telemetry.addData("Robot Heading", pos.getHeading(AngleUnit.DEGREES));
             telemetry.addLine();
         }
 
-        telemetry.addData("BR", BR.getPower());
-        telemetry.addData("BL", BL.getPower());
-        telemetry.addData("FR", FR.getPower());
-        telemetry.addData("FL", FL.getPower());
+        telemetry.addData("BR", robot.BR.getPower());
+        telemetry.addData("BL", robot.BL.getPower());
+        telemetry.addData("FR", robot.FR.getPower());
+        telemetry.addData("FL", robot.FL.getPower());
         telemetry.update();
     }
 }
