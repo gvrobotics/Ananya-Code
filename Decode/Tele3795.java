@@ -77,7 +77,7 @@ public class Tele3795 extends OpMode {
         if (currLB && !prevLB) {
             intakeOn = !intakeOn;
             if (intakeOn) {
-               intake.setPower(0.7);
+               intake.setPower(0.8);
             } else {
                 intake.setPower(0);
             }
@@ -88,10 +88,14 @@ public class Tele3795 extends OpMode {
         if (currA && !prevA) {
             transOn = !transOn;
             if (transOn) {
-                transfer.setPower(0.4);
+                transfer.setPower(0.6);
             } else {
                 transfer.setPower(0);
             }
         }
+        telemetry.addData("Fly Left", fly1.getVelocity());
+        telemetry.addData("Fly Right", fly2.getVelocity());
+        telemetry.addData("Intake", intake.getVelocity());
+        telemetry.addData("Transfer", transfer.getVelocity());
     }
 }
