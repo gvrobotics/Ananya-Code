@@ -72,24 +72,23 @@ public class AprilTag_OdoTest extends OpMode {
         if (result != null && result.isValid()) {
             Pose3D tagPose = result.getBotpose_MT2();
 
-            double tagX = tagPose.getPosition().x;
-            double tagY = tagPose.getPosition().y;
+            // Convert Limelight meters → inches
+            double tagX_in = tagPose.getPosition().x * 39.3701;
+            double tagY_in = tagPose.getPosition().y * 39.3701;
 
-            // current odo pose
+            // Current odo position in inches
             double odoX = odoPose.getX(DistanceUnit.INCH);
             double odoY = odoPose.getY(DistanceUnit.INCH);
 
-//
-//           double correctedX = odoX * (1 - TAG_BLEND) + tagX * TAG_BLEND;
-//           double correctedY = odoY * (1 - TAG_BLEND) + tagY * TAG_BLEND;
+            // Smooth blend
+            double correctedX = odoX * (1 - TAG_BLEND) + tagX_in * TAG_BLEND;
+            double correctedY = odoY * (1 - TAG_BLEND) + tagY_in * TAG_BLEND;
 
-            Pose2D correctedPose = new Pose2D(DistanceUnit.INCH, odoX, odoY, AngleUnit.DEGREES, odoHeading);
-
+            Pose2D correctedPose = new Pose2D(DistanceUnit.INCH, correctedX, correctedY, AngleUnit.DEGREES, odoHeading);
             odo.setPosition(correctedPose);
 
             telemetry.addLine("AprilTag correction active");
-            // distance info
-            telemetry.addData("Tag Distance (m)", Math.hypot(tagX, tagY));
+            telemetry.addData("Tag Distance (in)", Math.hypot(tagX_in, tagY_in));
         }
         else {
             telemetry.addLine("No AprilTag visible");
