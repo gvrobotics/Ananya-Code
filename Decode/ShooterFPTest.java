@@ -1,21 +1,31 @@
 package org.firstinspires.ftc.teamcode.Tele;
 
+import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
+
+import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 
 @TeleOp(name = "New Shooter Test", group = "B")
 public class ShooterFPTest extends OpMode {
 
     DcMotorEx fly1, fly2;
-    Servo push1, push2;
+    Servo push1, push2, launch;
 
-    // ===== TUNING VALUES =====
-    double targetVelocity = 1500; // ticks/sec
-    double kF = 1/2320;
-    double kP = 0.0005; // START LOW use dpad left and right to increment
+    Limelight3A limelight;
+    IMU imu;
+
+    // ===== TUNING =====
+    double targetVelocity = 1500;
+    double kF = 1 / 2320.0;
+    double kP = 0.0005;
 
     boolean shooterOn = false;
     boolean prevRB = false;
@@ -28,39 +38,49 @@ public class ShooterFPTest extends OpMode {
         fly2 = hardwareMap.get(DcMotorEx.class, "f2");
         push1 = hardwareMap.get(Servo.class, "p1");
         push2 = hardwareMap.get(Servo.class, "p2");
+        launch = hardwareMap.get(Servo.class, "l");
+
+        limelight = hardwareMap.get(Limelight3A.class, "limelight");
+        imu = hardwareMap.get(IMU.class, "imu");
+
+        RevHubOrientationOnRobot orientation =
+                new RevHubOrientationOnRobot(
+                        RevHubOrientationOnRobot.LogoFacingDirection.LEFT,
+                        RevHubOrientationOnRobot.UsbFacingDirection.UP
+                );
+
+        imu.initialize(new IMU.Parameters(orientation));
+        limelight.pipelineSwitch(0);
+        limelight.start();
 
         fly1.setDirection(DcMotorSimple.Direction.REVERSE);
         fly2.setDirection(DcMotorSimple.Direction.REVERSE);
-        push1.setDirection(Servo.Direction.REVERSE);
-        push2.setDirection(Servo.Direction.FORWARD);
 
-
-        // IMPORTANT: manual control
         fly1.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
         fly2.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
 
         fly1.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.FLOAT);
         fly2.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.FLOAT);
 
-        push1.setPosition(0.4); //push 1 (R) - down is 0.4, up is 0.7 == push 2 (F) - down is 0, up is 0.25
+        push1.setPosition(0.4);
         push2.setPosition(0);
+        launch.setPosition(0.5);
     }
 
     @Override
     public void loop() {
 
-        // ===== SHOOTER TOGGLE =====
-        boolean rb = gamepad1.right_bumper;
-        if (rb && !prevRB) {
-            shooterOn = !shooterOn;
-        }
-        prevRB = rb;
+        // ===== Update Limelight Orientation =====
+        YawPitchRollAngles angles = imu.getRobotYawPitchRollAngles();
+        limelight.updateRobotOrientation(angles.getYaw());
 
         // ===== PUSH TOGGLE =====
         prevA = currA;
-        currA = gamepad1.a;
+        currA = gamepad2.a;
+
         if (currA && !prevA) {
             pushOn = !pushOn;
+
             if (pushOn) {
                 push1.setPosition(0.7);
                 push2.setPosition(0.25);
@@ -70,15 +90,17 @@ public class ShooterFPTest extends OpMode {
             }
         }
 
-        // ===== TARGET VELOCITY =====
-        if (gamepad1.dpadUpWasPressed()) targetVelocity += 10;
-        if (gamepad1.dpadDownWasPressed()) targetVelocity -= 10;
+        // ===== LAUNCH Adjust =====
+        if (gamepad1.dpad_up) launch.setPosition(launch.getPosition() + 0.01);
+        if (gamepad1.dpad_down) launch.setPosition(launch.getPosition() - 0.01);
 
-        if (gamepad1.dpadLeftWasPressed()) kP -= 0.001;
-        if (gamepad1.dpadRightWasPressed()) kP += 0.001;
+        // ===== SHOOTER TOGGLE =====
+        boolean rb = gamepad1.right_bumper;
+        if (rb && !prevRB) shooterOn = !shooterOn;
+        prevRB = rb;
 
-        // ===== LOOP =====
-        double velocity = Math.abs(fly1.getVelocity()); // only ONE encoder
+        double velocity = Math.abs(fly1.getVelocity());
+        double vel = 1000;
         double error = targetVelocity - velocity;
 
         double power = 0;
@@ -86,25 +108,46 @@ public class ShooterFPTest extends OpMode {
             power = (targetVelocity * kF) + (error * kP);
         }
 
-        // add in at the end to cap power
-        //power = Math.max(0, Math.min(1.0, power));
+        fly1.setPower(vel);
+        fly2.setPower(vel);
 
-        fly1.setPower(power);
-        fly2.setPower(power);
+        if (gamepad1.dpad_left) vel += 10;
+        if (gamepad1.dpad_right) vel -= 10;
+
+        // ===== Distance from AprilTag =====
+        double distanceInches = getDistanceFromLimelight();
 
         // ===== TELEMETRY =====
         telemetry.addData("Shooter", shooterOn ? "ON" : "OFF");
-        telemetry.addData("Target Vel", targetVelocity);
-        telemetry.addData("Actual Vel 1", fly1.getVelocity());
-        telemetry.addData("Actual Vel 2", fly2.getVelocity());
-        telemetry.addData("Error", error);
-        telemetry.addData("kF", kF);
-        telemetry.addData("kP", kP);
-        telemetry.addData("Power", power);
-        telemetry.addLine("========PUSH========");
+        //telemetry.addData("Target Vel", targetVelocity);
+        //telemetry.addData("Power", power);
+        telemetry.addData("Distance (in)", distanceInches);
+        telemetry.addData("Velocity", vel);
+        telemetry.addData("Launch", launch.getPosition());
+
+        telemetry.addLine("==== PUSH ====");
         telemetry.addData("Pusher", pushOn ? "UP" : "DOWN");
-        telemetry.addData("Push1 pos", push1.getPosition());
-        telemetry.addData("Push2 pos", push2.getPosition());
+
         telemetry.update();
+    }
+
+    // ===== Distance Helper =====
+
+    private double getDistanceFromLimelight() {
+
+        LLResult result = limelight.getLatestResult();
+
+        if (result != null && result.isValid()) {
+
+            Pose3D pose = result.getBotpose_MT2();
+
+            double x = pose.getPosition().x;
+            double y = pose.getPosition().y;
+
+            double meters = Math.hypot(x, y);
+            return meters * 39.3701;
+        }
+
+        return -1; // no tag detected
     }
 }
