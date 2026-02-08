@@ -16,8 +16,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.Odo.GoBildaPinpointDriver;
 
 
-@TeleOp (name = "Tele Test", group = "A")
-public class AutoAdjustTele extends OpMode {
+@TeleOp (name = "Tele 5440", group = "A")
+public class Tele5440 extends OpMode {
     public DcMotorEx fly1, fly2, intake1, intake2;
     public Servo push1, push2, launch;
     GoBildaPinpointDriver odo;
@@ -30,9 +30,8 @@ public class AutoAdjustTele extends OpMode {
             prevB = false, currB, prevX = false, currX,
             fieldCentricMode = true, prevY = false, currY;
     private int shotsRemaining = 0;
-    double TARGET_VELOCITY = 960, INTAKEON_TIME = 0.2;
-    private double P = 0.212, F = 12.199;
-    private double pushUp1 = 0.7, pushDown1 = 0.4, pushUp2 = 0.25, pushDown2 = 0; //push 1 (R) - down is 0.4, up is 0.7 == push 2 (F) - down is 0, up is 0.25
+    double INTAKEON_TIME = 0.2;
+    private double pushUp1 = 0.7, pushDown1 = 0.4, pushUp2 = 0.25, pushDown2 = 0;
 
     private Limelight3A limelight;
     private static final double LIME_MOUNT_ANGLE = 15.0;
@@ -43,14 +42,16 @@ public class AutoAdjustTele extends OpMode {
     // ================= LOOKUP TABLE =================
     private final double [] distances = {30, 60, 143};
     private final double [] angles = {0.97, 0.65, 0.1};
-    private final double [] velocities = {1100, 1220, 1420};
+    private final double [] velocities = {890, 1000, 1220};
 
     private double targetAngle = 0.5;
-    private double targetVelocity = 0;
+    private double targetVelocity = 1300;
+
+    // ===== FF + P CONTROL VALUES =====
+    private double kF = 0.00052;
+    private double kP = 0.0026;
 
     private boolean shooterAtTarget = false;
-    private boolean prevShooterAtTarget = false;
-
 
     // State machine for launch sequence
     private enum LaunchState {
@@ -92,12 +93,9 @@ public class AutoAdjustTele extends OpMode {
         push2.setDirection(Servo.Direction.FORWARD);
         launch.setDirection(Servo.Direction.FORWARD);
 
-        // Configure flywheel motors with PIDF
-        fly1.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-        fly2.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-
-        fly1.setVelocityPIDFCoefficients(P, 0, 0, F);
-        fly2.setVelocityPIDFCoefficients(P, 0, 0, F);
+        // Configure flywheel motors - MANUAL CONTROL FOR FF+P
+        fly1.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
+        fly2.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
 
         // Set all motors to brake when power is zero
         fly1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
@@ -110,8 +108,8 @@ public class AutoAdjustTele extends OpMode {
         fly2.setPower(0);
         intake1.setVelocity(0);
         intake2.setVelocity(0);
-        push1.setPosition(0.4);
-        push2.setPosition(0); //push 1 (R) - down is 0.4, up is 0.7 == push 2 (F) - down is 0, up is 0.25
+        push1.setPosition(pushDown1);
+        push2.setPosition(pushDown2);
         launch.setPosition(0.5);
 
         // ===== ODOMETRY CONFIGURATION =====
@@ -164,30 +162,33 @@ public class AutoAdjustTele extends OpMode {
             targetAngle = interpolate(distances, angles, trigDistance);
             targetVelocity = interpolate(distances, velocities, trigDistance);
         }
-        // ===== AUTO SHOOTER TARGET =====
-        if (shooterOn && trigDistance > 0) {
-
-            launch.setPosition(targetAngle);
-
-            fly1.setVelocity(targetVelocity);
-            fly2.setVelocity(targetVelocity);
-        }
-
 
         // ============= SHOOTER TOGGLE (Right Bumper) ===========
         prevRB1 = currRB1;
         currRB1 = gamepad1.right_bumper;
         if (currRB1 && !prevRB1) {
             shooterOn = !shooterOn;
-            if (shooterOn) {
-                fly1.setVelocity(targetVelocity);
-                fly2.setVelocity(targetVelocity);
-            } else {
-                fly1.setVelocity(0);
-                fly2.setVelocity(0);
+            if (!shooterOn) {
                 flywheelReady = false; // reset when turning off
             }
         }
+
+        // ===== FF + P CONTROL LOOP =====
+        double velocity = Math.abs(fly1.getVelocity());
+        double error = targetVelocity - velocity;
+
+        double power = 0;
+        if (shooterOn) {
+            // Auto aim if limelight has valid target
+            if (trigDistance > 0) {
+                launch.setPosition(targetAngle);
+            }
+
+            power = (targetVelocity * kF) + (error * kP);
+        }
+
+        fly1.setPower(power);
+        fly2.setPower(power);
 
         // ===== FLYWHEEL RUMBLE =====
         if (shooterOn) {
@@ -195,12 +196,14 @@ public class AutoAdjustTele extends OpMode {
 
             shooterAtTarget = Math.abs(avgVelocity - targetVelocity) < 40;
 
-            if (avgVelocity >= (targetVelocity - 25) ) {
+            if (!flywheelReady && avgVelocity >= (targetVelocity - 25)) {
                 gamepad1.rumbleBlips(2);
+                flywheelReady = true;
             }
+        } else {
+            flywheelReady = false;
+            shooterAtTarget = false;
         }
-
-        prevShooterAtTarget = shooterAtTarget;
 
         // ===== INTAKE TOGGLE (Left Bumper) =====
         prevLB1 = currLB1;
@@ -286,7 +289,7 @@ public class AutoAdjustTele extends OpMode {
                 break;
 
             case INTAKE_ON:
-                if (timer.seconds() >= INTAKEON_TIME) { // change this value depending on the intake timing issues
+                if (timer.seconds() >= INTAKEON_TIME) {
                     shotsRemaining--;
                     // Stop intake
                     intake1.setPower(0);
@@ -322,7 +325,7 @@ public class AutoAdjustTele extends OpMode {
         // Only allow A toggle if not in launch sequence
         if (launchState == LaunchState.IDLE && currA2 && !prevA2) {
             pushOn = !pushOn;
-            push1.setPosition(pushOn ? pushUp1 : pushDown1); // up - down
+            push1.setPosition(pushOn ? pushUp1 : pushDown1);
             push2.setPosition(pushOn ? pushUp2 : pushDown2);
         }
 
@@ -359,8 +362,8 @@ public class AutoAdjustTele extends OpMode {
         telemetry.addData("Shooter Ready", flywheelReady ? "YES" : "NO");
         telemetry.addData("Fly Up", fly1.getVelocity());
         telemetry.addData("Fly Down", fly2.getVelocity());
-//        telemetry.addData("Fly1 Power", fly1.getPower());
-//        telemetry.addData("Fly2 Power", fly2.getPower());
+        telemetry.addData("Error", error);
+        telemetry.addData("Power", power);
         telemetry.addLine();
 
         telemetry.addLine("===== AUTO AIM =====");
