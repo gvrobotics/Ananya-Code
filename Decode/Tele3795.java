@@ -23,15 +23,15 @@ public class Tele3795 extends OpMode {
         fly1 = hardwareMap.get(DcMotorEx.class, "f1");
         fly2 = hardwareMap.get(DcMotorEx.class, "f2");
         intake = hardwareMap.get(DcMotorEx.class, "i1");
-        transfer = hardwareMap.get(DcMotorEx.class, "i1");
+        transfer = hardwareMap.get(DcMotorEx.class, "i2");
 
         BR.setDirection(DcMotorSimple.Direction.REVERSE);
         BL.setDirection(DcMotorSimple.Direction.FORWARD);
         FR.setDirection(DcMotorSimple.Direction.FORWARD);
         FL.setDirection(DcMotorSimple.Direction.REVERSE);
-        fly1.setDirection(DcMotorSimple.Direction.REVERSE);
-        fly2.setDirection(DcMotorSimple.Direction.FORWARD);
-        intake.setDirection(DcMotorSimple.Direction.FORWARD);
+        fly1.setDirection(DcMotorSimple.Direction.FORWARD);
+        fly2.setDirection(DcMotorSimple.Direction.REVERSE);
+        intake.setDirection(DcMotorSimple.Direction.REVERSE);
         transfer.setDirection(DcMotorSimple.Direction.FORWARD);
 
         fly1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
@@ -74,8 +74,8 @@ public class Tele3795 extends OpMode {
         if (currRB1 && !prevRB1) {
             shooterOn = !shooterOn;
             if (shooterOn) {
-                fly1.setPower(0.5);
-                fly2.setPower(0.5);
+                fly1.setPower(0.7);
+                fly2.setPower(0.7);
             } else {
                 fly1.setPower(0);
                 fly2.setPower(0);
@@ -103,6 +103,7 @@ public class Tele3795 extends OpMode {
                 transfer.setPower(0);
             }
         }
+
         telemetry.addData("Fly Left", fly1.getVelocity());
         telemetry.addData("Fly Right", fly2.getVelocity());
         telemetry.addData("Intake", intake.getVelocity());
