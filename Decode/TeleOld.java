@@ -13,19 +13,24 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.Odo.GoBildaPinpointDriver;
 
-@TeleOp (name = "Tele 5440", group = "A")
-public class Tele5440 extends OpMode {
+@TeleOp (name = "Tele 5440 1", group = "A")
+public class TeleOld extends OpMode {
     public DcMotorEx fly1, fly2, intake1, intake2;
     public Servo push1, push2, launch;
+    GoBildaPinpointDriver odo;
+
     private Boolean intakeOn = false, prevLB1 = false, currLB1,
             intakeDirection = false, prevLB2 = false, currLB2,
             shooterOn = false, prevRB1 = false, currRB1, flywheelReady = false,
             launchOn = false, prevY2 = false, currY2,
             pushOn = false, prevA2 = false, currA2,
             prevB = false, currB, prevX = false, currX,
-            fieldCentricMode = true;
+            fieldCentricMode = true, prevY = false, currY;
     private int shotsRemaining = 0;
-    double TARGET_VELOCITY = 960;
+    private boolean rumbleReady = false;
+
+    double TARGET_VELOCITY = 960, INTAKEON_TIME = 0.2;
+
     private double P = 0.212, F = 12.199;
     private double pushUp1 = 0.7, pushDown1 = 0.4, pushUp2 = 0.25, pushDown2 = 0; //push 1 (R) - down is 0.4, up is 0.7 == push 2 (F) - down is 0, up is 0.25
 
@@ -57,6 +62,9 @@ public class Tele5440 extends OpMode {
         push2 = hardwareMap.get(Servo.class, "p2");
         launch = hardwareMap.get(Servo.class, "l");
 
+        // Initialize odometry
+        odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
+
         // Set motor directions
         fly1.setDirection(DcMotorSimple.Direction.REVERSE);
         fly2.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -67,11 +75,8 @@ public class Tele5440 extends OpMode {
         launch.setDirection(Servo.Direction.FORWARD);
 
         // Configure flywheel motors with PIDF
-        fly1.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-        fly2.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-
-        fly1.setVelocityPIDFCoefficients(P, 0, 0, F);
-        fly2.setVelocityPIDFCoefficients(P, 0, 0, F);
+        fly1.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
+        fly2.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
 
         // Set all motors to brake when power is zero
         fly1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
@@ -87,6 +92,19 @@ public class Tele5440 extends OpMode {
         push1.setPosition(0.4);
         push2.setPosition(0); //push 1 (R) - down is 0.4, up is 0.7 == push 2 (F) - down is 0, up is 0.25
         launch.setPosition(0.5);
+
+        // ===== ODOMETRY CONFIGURATION =====
+        odo.setOffsets(-4.33, -3.5, DistanceUnit.INCH);
+        odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+        odo.setEncoderDirections(
+                GoBildaPinpointDriver.EncoderDirection.REVERSED,
+                GoBildaPinpointDriver.EncoderDirection.REVERSED
+        );
+
+        // Reset and set starting position
+        odo.resetPosAndIMU();
+        Pose2D startingPosition = new Pose2D(DistanceUnit.MM, -923.925, 1601.47, AngleUnit.RADIANS, 0);
+        odo.setPosition(startingPosition);
     }
 
     @Override
@@ -100,14 +118,18 @@ public class Tele5440 extends OpMode {
             intakeOn = !intakeOn;
         }
 
-        double intakePower = 0;
+        // ONLY allow toggle intake when NOT shooting
+        if (launchState == LaunchState.IDLE) {
+            double intakePower = 0;
 
-        if (intakeOn) {
-            intakePower = intakeDirection ? -0.4 : 0.4;
+            if (intakeOn) {
+                intakePower = intakeDirection ? -0.4 : 0.4;
+            }
+
+            intake1.setPower(intakePower);
+            intake2.setPower(intakePower);
         }
 
-        intake1.setPower(intakePower);
-        intake2.setPower(intakePower);
 
         // ============= SHOOTER TOGGLE (Right Bumper) ===========
         prevRB1 = currRB1;
@@ -145,8 +167,8 @@ public class Tele5440 extends OpMode {
             shotsRemaining = 3;
 
             // Stop intake
-            intake1.setVelocity(0);
-            intake2.setVelocity(0);
+            intake1.setPower(0);
+            intake2.setPower(0);
             intakeOn = false;
 
             // Pusher up
@@ -162,9 +184,11 @@ public class Tele5440 extends OpMode {
         currB = gamepad1.b;
         // Start launch sequence on B tap if IDLE
         if (currB && !prevB && launchState == LaunchState.IDLE) {
+            shotsRemaining = 1;
             // Stop intake
-            intake1.setVelocity(0);
-            intake2.setVelocity(0);
+            intake1.setPower(0);
+            intake2.setPower(0);
+
             intakeOn = false;
 
             // Pusher up
@@ -191,19 +215,21 @@ public class Tele5440 extends OpMode {
             case PUSH_BACK:
                 if (timer.seconds() >= 0.2) {
                     // Turn intake on
-                    intake1.setVelocity(800);
-                    intake2.setVelocity(800);
+                    intake1.setPower(0.8);
+                    intake2.setPower(0.8);
+
                     timer.reset();
                     launchState = LaunchState.INTAKE_ON;
                 }
                 break;
 
             case INTAKE_ON:
-                if (timer.seconds() >= 0.5) {
+                if (timer.seconds() >= INTAKEON_TIME) { // change this value depending on the intake timing issues
                     shotsRemaining--;
                     // Stop intake
-                    intake1.setVelocity(0);
-                    intake2.setVelocity(0);
+                    intake1.setPower(0);
+                    intake2.setPower(0);
+
 
                     if (shotsRemaining > 0) {
                         push1.setPosition(pushUp1);
@@ -212,6 +238,12 @@ public class Tele5440 extends OpMode {
                         launchState = LaunchState.PUSH_DOWN;
                     } else {
                         launchState = LaunchState.IDLE;
+                    }
+
+                    if (shotsRemaining == 2) {
+                        INTAKEON_TIME = 0.4;
+                    } else {
+                        INTAKEON_TIME = 0.2;
                     }
                 }
                 break;
@@ -228,7 +260,7 @@ public class Tele5440 extends OpMode {
         // Only allow A toggle if not in launch sequence
         if (launchState == LaunchState.IDLE && currA2 && !prevA2) {
             pushOn = !pushOn;
-            push1.setPosition(pushOn ? pushUp1 : pushDown1);
+            push1.setPosition(pushOn ? pushUp1 : pushDown1); // up - down
             push2.setPosition(pushOn ? pushUp2 : pushDown2);
         }
 
@@ -238,9 +270,8 @@ public class Tele5440 extends OpMode {
 
         if (currY2 && !prevY2) {
             launchOn = !launchOn;
-            launch.setPosition(launchOn ? 1 : 0.5);
+            launch.setPosition(launchOn ? 1 : 0.1);
         }
-
 
         // ===== INTAKE DIRECTION TOGGLE (Left bumper on 2) =====
         prevLB2 = currLB2;
@@ -252,7 +283,7 @@ public class Tele5440 extends OpMode {
 
         // ===== TELEMETRY =====
         // Drive mode indicator
-        telemetry.addData("DRIVE MODE", robot.fieldCentric ? "FIELD-CENTRIC" : "ROBOT-CENTRIC");
+        telemetry.addData("DRIVE MODE", fieldCentricMode ? "FIELD-CENTRIC" : "ROBOT-CENTRIC");
         telemetry.addLine();
 
         telemetry.addLine("========STATE========");
@@ -281,7 +312,7 @@ public class Tele5440 extends OpMode {
         // Drive motor info
         // Odometry position (only shown in field-centric mode)
         if (fieldCentricMode) {
-            Pose2D pos = robot.odo.getPosition();
+            Pose2D pos = odo.getPosition();
             telemetry.addData("Robot X", pos.getX(DistanceUnit.MM));
             telemetry.addData("Robot Y", pos.getY(DistanceUnit.MM));
             telemetry.addData("Robot Heading", pos.getHeading(AngleUnit.DEGREES));
