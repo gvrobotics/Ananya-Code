@@ -1,16 +1,19 @@
 package org.firstinspires.ftc.teamcode.Tele;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
+@TeleOp
 public class Tele3795 extends OpMode {
     public DcMotor BR, BL, FR, FL;
     public DcMotorEx intake, fly1, fly2, transfer;
     private Boolean prevRB1 = false, currRB1 = false, shooterOn = false;
     private Boolean prevLB = false, currLB = false, intakeOn = false;
     private Boolean prevA = false, currA = false, transOn = false;
+    private double powerRY, powerRX, powerLX, powerLY, robotAngle, PowerMultiplier, lf, rb, rf, lb;
 
     public void init() {
         BR = hardwareMap.get(DcMotor.class, "BR");
@@ -22,6 +25,10 @@ public class Tele3795 extends OpMode {
         intake = hardwareMap.get(DcMotorEx.class, "i1");
         transfer = hardwareMap.get(DcMotorEx.class, "i1");
 
+        BR.setDirection(DcMotorSimple.Direction.REVERSE);
+        BL.setDirection(DcMotorSimple.Direction.FORWARD);
+        FR.setDirection(DcMotorSimple.Direction.FORWARD);
+        FL.setDirection(DcMotorSimple.Direction.REVERSE);
         fly1.setDirection(DcMotorSimple.Direction.REVERSE);
         fly2.setDirection(DcMotorSimple.Direction.FORWARD);
         intake.setDirection(DcMotorSimple.Direction.FORWARD);
@@ -39,24 +46,27 @@ public class Tele3795 extends OpMode {
     }
 
     public void loop() {
-        double y = -gamepad1.left_stick_y; // Remember, Y stick value is reversed
-        double x = gamepad1.left_stick_x * 1.1; // Counteract imperfect strafing
-        double rx = gamepad1.right_stick_x;
+        powerLX = -gamepad1.left_stick_x;
+        powerLY = gamepad1.right_stick_x;
+        powerRX = gamepad1.left_stick_y;
+        powerRY = gamepad1.right_stick_y;
 
         // Denominator is the largest motor power (absolute value) or 1
         // This ensures all the powers maintain the same ratio,
         // but only if at least one is out of the range [-1, 1]
 
-        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1);
-        double BRp = (y + x - rx);
-        double BLp = (y - x + rx);
-        double FRp = (y - x - rx);
-        double FLp = (y + x + rx);
+        robotAngle = Math.atan2(powerLY, powerLX);
+        PowerMultiplier = Math.sqrt((Math.pow(powerLX, 2) + Math.pow(powerLY, 2)));
 
-        BR.setPower(BRp);
-        BL.setPower(BLp);
-        FR.setPower(FRp);
-        FL.setPower(FLp);
+        lf = (PowerMultiplier*Math.sin(robotAngle-(Math.PI/4))) - powerRX;
+        rb = (PowerMultiplier*Math.sin(robotAngle-(Math.PI/4))) + powerRX;
+        lb = (PowerMultiplier*-1*(Math.sin(robotAngle+(Math.PI/4)))) - powerRX;
+        rf = (PowerMultiplier*-1*(Math.sin(robotAngle+(Math.PI/4)))) + powerRX;
+
+        BR.setPower(rb);
+        BL.setPower(lb);
+        FR.setPower(rf);
+        FL.setPower(lf);
 
         // ============= SHOOTER TOGGLE (Right Bumper) ===========
         prevRB1 = currRB1;
