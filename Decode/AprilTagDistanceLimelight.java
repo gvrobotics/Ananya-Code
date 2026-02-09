@@ -96,11 +96,14 @@ public class AprilTagDistanceLimelight extends OpMode {
             // Only display pose distance if valid
             if (poseDistance > 0) {
                 telemetry.addData("Pose Distance (in)", poseDistance);
-            } else {
-                // No AprilTag detected
-                telemetry.addLine("No AprilTag detected");
             }
-            telemetry.update();
+
+        } else {
+            // No AprilTag detected
+            telemetry.addLine("No AprilTag detected");
         }
+
+        // ALWAYS update telemetry
+        telemetry.update();
     }
 }
