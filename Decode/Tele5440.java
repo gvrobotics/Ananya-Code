@@ -24,15 +24,17 @@ public class Tele5440 extends OpMode {
 
     private Boolean intakeOn = false, prevLB1 = false, currLB1,
             intakeDirection = false, prevLB2 = false, currLB2,
-            shooterOn = false, prevRB1 = false, currRB1, flywheelReady = false,
-            launchOn = false, prevY2 = false, currY2,
+            shooterOn = false, prevRB1 = false, currRB1, flywheelRumble = false,
             pushOn = false, prevA2 = false, currA2,
             prevB = false, currB, prevX = false, currX,
-            fieldCentricMode = true, prevY = false, currY;
+            prevA = false, currA = false;
+    private double pushUp1 = 0.7, pushDown1 = 0.4, pushUp2 = 0.25, pushDown2 = 0;
     private int shotsRemaining = 0;
     double INTAKEON_TIME = 0.2;
-    private double pushUp1 = 0.7, pushDown1 = 0.4, pushUp2 = 0.25, pushDown2 = 0;
+    private boolean autoAlignOn = false;
+    double kP_align = 0.0201; //TODO: ADJUST
 
+    // ================= LIMELIGHT VARIABLES =================
     private Limelight3A limelight;
     private static final double LIME_MOUNT_ANGLE = 15.0;
     private static final double LIME_HEIGHT = 13.0;
@@ -40,17 +42,16 @@ public class Tele5440 extends OpMode {
     private double trigDistance = -1;
 
     // ================= LOOKUP TABLE =================
-    private final double [] distances = {30, 60, 143};
-    private final double [] angles = {0.97, 0.65, 0.1};
-    private final double [] velocities = {890, 1000, 1220};
+    private final double [] distances = {30, 40, 50, 60, 75, 137, 165, 172};
+    private final double [] angles = {1, 0.7, 0.65, 0.6, 0.35, 0.15, 0.15, 0.1};
+    private final double [] velocities = {820, 860, 880, 900, 1020, 1160, 1220, 1230};
 
     private double targetAngle = 0.5;
-    private double targetVelocity = 1300;
+    private double targetVelocity = 1000;
 
     // ===== FF + P CONTROL VALUES =====
     private double kF = 0.00052;
     private double kP = 0.0026;
-
     private boolean shooterAtTarget = false;
 
     // State machine for launch sequence
@@ -63,28 +64,26 @@ public class Tele5440 extends OpMode {
 
     private LaunchState launchState = LaunchState.IDLE;
     private ElapsedTime timer = new ElapsedTime();
-    Drive robot;
+    Drivetrain robot;
 
     @Override
     public void init() {
-        // Initialize drive motors
-        robot = new Drive(hardwareMap);
-
-        // Initialize mechanism motors
+        // Initialize
+        robot = new Drivetrain(hardwareMap);
         fly1 = hardwareMap.get(DcMotorEx.class, "f1");
         fly2 = hardwareMap.get(DcMotorEx.class, "f2");
         intake1 = hardwareMap.get(DcMotorEx.class, "i1");
         intake2 = hardwareMap.get(DcMotorEx.class, "i2");
 
-        // Initialize servos
         push1 = hardwareMap.get(Servo.class, "p1");
         push2 = hardwareMap.get(Servo.class, "p2");
         launch = hardwareMap.get(Servo.class, "l");
 
-        // Initialize odometry
         odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
 
         // Set motor directions
+//        robot.BL.setDirection(DcMotorSimple.Direction.REVERSE);
+//        robot.FL.setDirection(DcMotorSimple.Direction.REVERSE);
         fly1.setDirection(DcMotorSimple.Direction.REVERSE);
         fly2.setDirection(DcMotorSimple.Direction.REVERSE);
         intake1.setDirection(DcMotorSimple.Direction.FORWARD);
@@ -93,11 +92,11 @@ public class Tele5440 extends OpMode {
         push2.setDirection(Servo.Direction.FORWARD);
         launch.setDirection(Servo.Direction.FORWARD);
 
-        // Configure flywheel motors - MANUAL CONTROL FOR FF+P
+        // Configure flywheel motors
         fly1.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
         fly2.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
 
-        // Set all motors to brake when power is zero
+        // Set zero power behavior
         fly1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         fly2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         intake1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -106,24 +105,11 @@ public class Tele5440 extends OpMode {
         // Initialize all motors to zero power
         fly1.setPower(0);
         fly2.setPower(0);
-        intake1.setVelocity(0);
-        intake2.setVelocity(0);
+        intake1.setPower(0);
+        intake2.setPower(0);
         push1.setPosition(pushDown1);
         push2.setPosition(pushDown2);
         launch.setPosition(0.5);
-
-        // ===== ODOMETRY CONFIGURATION =====
-        odo.setOffsets(-4.33, -3.5, DistanceUnit.INCH);
-        odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        odo.setEncoderDirections(
-                GoBildaPinpointDriver.EncoderDirection.REVERSED,
-                GoBildaPinpointDriver.EncoderDirection.REVERSED
-        );
-
-        // Reset and set starting position
-        odo.resetPosAndIMU();
-        Pose2D startingPosition = new Pose2D(DistanceUnit.MM, -923.925, 1601.47, AngleUnit.RADIANS, 0);
-        odo.setPosition(startingPosition);
 
         // ===== Limelight =====
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
@@ -137,8 +123,8 @@ public class Tele5440 extends OpMode {
         if (value >= x[x.length - 1]) return y[y.length - 1];
 
         for (int i = 0; i < x.length - 1; i++) {
-            if (value >= x[i] && value <= x[i + 1]) {
-                double ratio = (value - x[i]) / (x[i + 1] - x[i]);
+            if (value >= x[i] && value <= x[i + 1]) {  // for a number that is in range
+                double ratio = (value - x[i]) / (x[i + 1] - x[i]); // find ratio of range to value in range
 
                 return y[i] + ratio * (y[i + 1] - y[i]);
             }
@@ -148,8 +134,6 @@ public class Tele5440 extends OpMode {
 
     @Override
     public void loop() {
-        robot.update(gamepad1);
-
         // ================= LIMELIGHT DISTANCE =================
         LLResult result = limelight.getLatestResult();
 
@@ -163,13 +147,39 @@ public class Tele5440 extends OpMode {
             targetVelocity = interpolate(distances, velocities, trigDistance);
         }
 
+        // ======== AUTO ALIGN TOGGLE (A button) ========
+        prevA = currA;
+        currA = gamepad1.a;
+        if (currA && !prevA) {
+            autoAlignOn = !autoAlignOn;
+        }
+
+        // ========= AUTO ALIGN TO TARGET =========
+        double rotationCorrection = 0;
+
+        if (autoAlignOn && result != null && result.isValid()) {
+            double tx = result.getTx(); // horizontal angle offset
+
+            // If tx is positive, target is to the right, so rotate right
+            // If tx is negative, target is to the left, so rotate left
+            rotationCorrection = tx * kP_align;
+            if (gamepad1.dpad_up) kP_align += 0.0001;
+            if (gamepad1.dpad_down) kP_align -= 0.0001;
+
+            // Clamp to reasonable rotation speed
+            rotationCorrection = Math.max(-0.3, Math.min(0.3, rotationCorrection));
+        }
+
+        // Pass this to drive
+        robot.update(gamepad1, rotationCorrection);
+
         // ============= SHOOTER TOGGLE (Right Bumper) ===========
         prevRB1 = currRB1;
         currRB1 = gamepad1.right_bumper;
         if (currRB1 && !prevRB1) {
             shooterOn = !shooterOn;
             if (!shooterOn) {
-                flywheelReady = false; // reset when turning off
+                flywheelRumble = false; // reset when turning off
             }
         }
 
@@ -194,14 +204,14 @@ public class Tele5440 extends OpMode {
         if (shooterOn) {
             double avgVelocity = (Math.abs(fly1.getVelocity()) + Math.abs(fly2.getVelocity())) / 2.0;
 
-            shooterAtTarget = Math.abs(avgVelocity - targetVelocity) < 40;
+            shooterAtTarget = Math.abs(avgVelocity - targetVelocity) < 40; // if difference is less thant 40
 
-            if (!flywheelReady && avgVelocity >= (targetVelocity - 25)) {
+            if (!flywheelRumble && avgVelocity >= (targetVelocity - 25)) {
                 gamepad1.rumbleBlips(2);
-                flywheelReady = true;
+                flywheelRumble = true;
             }
         } else {
-            flywheelReady = false;
+            flywheelRumble = false;
             shooterAtTarget = false;
         }
 
@@ -329,15 +339,6 @@ public class Tele5440 extends OpMode {
             push2.setPosition(pushOn ? pushUp2 : pushDown2);
         }
 
-        // ===== LAUNCH TOGGLE (X button on 2) =====
-        prevY2 = currY2;
-        currY2 = gamepad2.y;
-
-        if (currY2 && !prevY2) {
-            launchOn = !launchOn;
-            launch.setPosition(launchOn ? 1 : 0.1);
-        }
-
         // ===== INTAKE DIRECTION TOGGLE (Left bumper on 2) =====
         prevLB2 = currLB2;
         currLB2 = gamepad2.left_bumper;
@@ -348,7 +349,7 @@ public class Tele5440 extends OpMode {
 
         // ===== TELEMETRY =====
         // Drive mode indicator
-        telemetry.addData("DRIVE MODE", fieldCentricMode ? "FIELD-CENTRIC" : "ROBOT-CENTRIC");
+        telemetry.addData("DRIVE MODE", robot.fieldCentric ? "FIELD-CENTRIC" : "ROBOT-CENTRIC");
         telemetry.addLine();
 
         telemetry.addLine("========STATE========");
@@ -359,23 +360,29 @@ public class Tele5440 extends OpMode {
         telemetry.addLine();
 
         telemetry.addLine("========SHOOTER========");
-        telemetry.addData("Shooter Ready", flywheelReady ? "YES" : "NO");
+        telemetry.addData("Shooter Ready", shooterAtTarget ? "YES" : "NO");
         telemetry.addData("Fly Up", fly1.getVelocity());
         telemetry.addData("Fly Down", fly2.getVelocity());
-        telemetry.addData("Error", error);
         telemetry.addData("Power", power);
         telemetry.addLine();
 
-        telemetry.addLine("===== AUTO AIM =====");
+        // In telemetry section, add:
+        telemetry.addLine("===== AUTO ALIGN =====");
+        telemetry.addData("Auto Align", autoAlignOn ? "ON" : "OFF");
+        telemetry.addData("kP_align", kP_align);
+        if (result != null && result.isValid()) {
+            telemetry.addData("TX (horiz offset)", result.getTx());
+            telemetry.addData("Rotation Correction", rotationCorrection);
+        }
+        telemetry.addLine();
+
+        telemetry.addLine("===== AUTO ADJUST =====");
         telemetry.addData("Distance (in)", trigDistance);
         telemetry.addData("Target Velocity", targetVelocity);
         telemetry.addData("Target Angle", targetAngle);
-        telemetry.addData("Shooter Ready", shooterAtTarget);
         telemetry.addLine();
 
         telemetry.addLine("========VALUES========");
-        telemetry.addData("Push 1", push1.getPosition());
-        telemetry.addData("Push 2", push2.getPosition());
         telemetry.addData("Angle", launch.getPosition());
         telemetry.addData("Intake1", intake1.getPower());
         telemetry.addData("Intake2", intake2.getPower());
@@ -383,18 +390,13 @@ public class Tele5440 extends OpMode {
 
         // Drive motor info
         // Odometry position (only shown in field-centric mode)
-        if (fieldCentricMode) {
-            Pose2D pos = odo.getPosition();
+        if (robot.fieldCentric) {
+            Pose2D pos = robot.getPose();
             telemetry.addData("Robot X", pos.getX(DistanceUnit.MM));
             telemetry.addData("Robot Y", pos.getY(DistanceUnit.MM));
             telemetry.addData("Robot Heading", pos.getHeading(AngleUnit.DEGREES));
             telemetry.addLine();
         }
-
-        telemetry.addData("BR", robot.BR.getPower());
-        telemetry.addData("BL", robot.BL.getPower());
-        telemetry.addData("FR", robot.FR.getPower());
-        telemetry.addData("FL", robot.FL.getPower());
         telemetry.update();
     }
 }
