@@ -1,0 +1,400 @@
+package org.firstinspires.ftc.teamcode.Tele;
+
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.hardware.limelightvision.LLResult;
+
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.teamcode.Odo.GoBildaPinpointDriver;
+
+
+@TeleOp (name = "Tele 5440 Test", group = "A")
+public class TeleTestAiming extends OpMode {
+    public DcMotorEx fly1, fly2, intake1, intake2;
+    public Servo push1, push2, launch;
+    GoBildaPinpointDriver odo;
+
+    private Boolean intakeOn = false, prevLB1 = false, currLB1,
+            intakeDirection = false, prevLB2 = false, currLB2,
+            shooterOn = false, prevRB1 = false, currRB1, flywheelRumble = false,
+            pushOn = false, prevA2 = false, currA2,
+            prevB = false, currB, prevX = false, currX,
+            prevA = false, currA = false;
+    private double pushUp1 = 0.7, pushDown1 = 0.4, pushUp2 = 0.25, pushDown2 = 0;
+    private int shotsRemaining = 0;
+    double INTAKEON_TIME = 0.2;
+    private boolean autoAlignOn = false;
+
+    // ================= LIMELIGHT VARIABLES =================
+    private Limelight3A limelight;
+    private static final double LIME_MOUNT_ANGLE = 15.0;
+    private static final double LIME_HEIGHT = 13.0;
+    private static final double TAG_HEIGHT = 38.0;
+    private double trigDistance = -1;
+
+    // ================= LOOKUP TABLE =================
+    private final double [] distances = {30, 60, 143};
+    private final double [] angles = {0.97, 0.65, 0.1};
+    private final double [] velocities = {890, 1000, 1220};
+
+    private double targetAngle = 0.5;
+    private double targetVelocity = 1000;
+
+    // ===== FF + P CONTROL VALUES =====
+    private double kF = 0.00052;
+    private double kP = 0.0026;
+    private boolean shooterAtTarget = false;
+
+    // State machine for launch sequence
+    private enum LaunchState {
+        IDLE,
+        PUSH_DOWN,
+        PUSH_BACK,
+        INTAKE_ON
+    }
+
+    private LaunchState launchState = LaunchState.IDLE;
+    private ElapsedTime timer = new ElapsedTime();
+    Drivetrain robot;
+
+    @Override
+    public void init() {
+        // Initialize
+        robot = new Drivetrain(hardwareMap);
+        fly1 = hardwareMap.get(DcMotorEx.class, "f1");
+        fly2 = hardwareMap.get(DcMotorEx.class, "f2");
+        intake1 = hardwareMap.get(DcMotorEx.class, "i1");
+        intake2 = hardwareMap.get(DcMotorEx.class, "i2");
+
+        push1 = hardwareMap.get(Servo.class, "p1");
+        push2 = hardwareMap.get(Servo.class, "p2");
+        launch = hardwareMap.get(Servo.class, "l");
+
+        odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
+
+        // Set motor directions
+        fly1.setDirection(DcMotorSimple.Direction.REVERSE);
+        fly2.setDirection(DcMotorSimple.Direction.REVERSE);
+        intake1.setDirection(DcMotorSimple.Direction.FORWARD);
+        intake2.setDirection(DcMotorSimple.Direction.REVERSE);
+        push1.setDirection(Servo.Direction.REVERSE);
+        push2.setDirection(Servo.Direction.FORWARD);
+        launch.setDirection(Servo.Direction.FORWARD);
+
+        // Configure flywheel motors
+        fly1.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
+        fly2.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
+
+        // Set zero power behavior
+        fly1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        fly2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        intake1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        intake2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
+        // Initialize all motors to zero power
+        fly1.setPower(0);
+        fly2.setPower(0);
+        intake1.setPower(0);
+        intake2.setPower(0);
+        push1.setPosition(pushDown1);
+        push2.setPosition(pushDown2);
+        launch.setPosition(0.5);
+
+        // ===== Limelight =====
+        limelight = hardwareMap.get(Limelight3A.class, "limelight");
+        limelight.pipelineSwitch(0);
+        limelight.start();
+    }
+
+    private double interpolate (double [] x, double [] y, double value) {
+        //clamp to range
+        if (value <= x[0]) return y[0];
+        if (value >= x[x.length - 1]) return y[y.length - 1];
+
+        for (int i = 0; i < x.length - 1; i++) {
+            if (value >= x[i] && value <= x[i + 1]) {  // for a number that is in range
+                double ratio = (value - x[i]) / (x[i + 1] - x[i]); // find ratio of range to value in range
+
+                return y[i] + ratio * (y[i + 1] - y[i]);
+            }
+        }
+        return y[0];
+    }
+
+    @Override
+    public void loop() {
+        // ================= LIMELIGHT DISTANCE =================
+        LLResult result = limelight.getLatestResult();
+
+        if (result != null && result.isValid()) {
+            double ty = result.getTy();
+            double angleRad = Math.toRadians(LIME_MOUNT_ANGLE + ty);
+            trigDistance = (TAG_HEIGHT - LIME_HEIGHT) / Math.tan(angleRad);
+
+            // lookup shooter targets
+            targetAngle = interpolate(distances, angles, trigDistance);
+            targetVelocity = interpolate(distances, velocities, trigDistance);
+        }
+
+        // ===== AUTO ALIGN TOGGLE (A button) =====
+        prevA = currA;
+        currA = gamepad1.a;
+        if (currA && !prevA) {
+            autoAlignOn = !autoAlignOn;
+        }
+
+        // ===== AUTO ALIGN TO TARGET =====
+        double rotationCorrection = 0;
+
+        if (autoAlignOn && result != null && result.isValid()) {
+            double tx = result.getTx(); // horizontal angle offset
+
+            // Simple proportional control
+            // If tx is positive, target is to the right, so rotate right
+            // If tx is negative, target is to the left, so rotate left
+            double kP_align = 0.02; // tune this value (start small!)
+            rotationCorrection = tx * kP_align;
+
+            // Clamp to reasonable rotation speed
+            rotationCorrection = Math.max(-0.3, Math.min(0.3, rotationCorrection));
+        }
+
+        // Pass this to your drive update
+        robot.update(gamepad1, rotationCorrection); // You'll need to modify Drive class
+
+        // ============= SHOOTER TOGGLE (Right Bumper) ===========
+        prevRB1 = currRB1;
+        currRB1 = gamepad1.right_bumper;
+        if (currRB1 && !prevRB1) {
+            shooterOn = !shooterOn;
+            if (!shooterOn) {
+                flywheelRumble = false; // reset when turning off
+            }
+        }
+
+        // ===== FF + P CONTROL LOOP =====
+        double velocity = Math.abs(fly1.getVelocity());
+        double error = targetVelocity - velocity;
+
+        double power = 0;
+        if (shooterOn) {
+            // Auto aim if limelight has valid target
+            if (trigDistance > 0) {
+                launch.setPosition(targetAngle);
+            }
+
+            power = (targetVelocity * kF) + (error * kP);
+        }
+
+        fly1.setPower(power);
+        fly2.setPower(power);
+
+        // ===== FLYWHEEL RUMBLE =====
+        if (shooterOn) {
+            double avgVelocity = (Math.abs(fly1.getVelocity()) + Math.abs(fly2.getVelocity())) / 2.0;
+
+            shooterAtTarget = Math.abs(avgVelocity - targetVelocity) < 40; // if difference is less thant 40
+
+            if (!flywheelRumble && avgVelocity >= (targetVelocity - 25)) {
+                gamepad1.rumbleBlips(2);
+                flywheelRumble = true;
+            }
+        } else {
+            flywheelRumble = false;
+            shooterAtTarget = false;
+        }
+
+        // ===== INTAKE TOGGLE (Left Bumper) =====
+        prevLB1 = currLB1;
+        currLB1 = gamepad1.left_bumper;
+        if (currLB1 && !prevLB1) {
+            intakeOn = !intakeOn;
+        }
+
+        // ONLY allow toggle intake when NOT shooting
+        if (launchState == LaunchState.IDLE) {
+            double intakePower = 0;
+
+            if (intakeOn) {
+                intakePower = intakeDirection ? -0.4 : 0.4;
+            }
+
+            intake1.setPower(intakePower);
+            intake2.setPower(intakePower);
+        }
+
+        // ====== LAUNCH SEQUENCE FOR 3 SHOTS (X button) =====
+        prevX = currX;
+        currX = gamepad1.x;
+
+        if (currX && !prevX && launchState == LaunchState.IDLE) {
+            shotsRemaining = 3;
+
+            // Stop intake
+            intake1.setPower(0);
+            intake2.setPower(0);
+            intakeOn = false;
+
+            // Pusher up
+            push1.setPosition(pushUp1);
+            push2.setPosition(pushUp2);
+
+            timer.reset();
+            launchState = LaunchState.PUSH_DOWN;
+        }
+
+        // ===== LAUNCH SEQUENCE FOR 1 SHOT (B button) =====
+        prevB = currB;
+        currB = gamepad1.b;
+        // Start launch sequence on B tap if IDLE
+        if (currB && !prevB && launchState == LaunchState.IDLE) {
+            shotsRemaining = 1;
+            // Stop intake
+            intake1.setPower(0);
+            intake2.setPower(0);
+
+            intakeOn = false;
+
+            // Pusher up
+            push1.setPosition(pushUp1);
+            push2.setPosition(pushUp2);
+
+            // Start state machine
+            timer.reset();
+            launchState = LaunchState.PUSH_DOWN;
+        }
+
+        // Run launch state machine
+        switch (launchState) {
+            case PUSH_DOWN:
+                if (timer.seconds() >= 0.2) {
+                    // Pusher down
+                    push1.setPosition(pushDown1);
+                    push2.setPosition(pushDown2);
+                    timer.reset();
+                    launchState = LaunchState.PUSH_BACK;
+                }
+                break;
+
+            case PUSH_BACK:
+                if (timer.seconds() >= 0.2) {
+                    // Turn intake on
+                    intake1.setPower(0.8);
+                    intake2.setPower(0.8);
+
+                    timer.reset();
+                    launchState = LaunchState.INTAKE_ON;
+                }
+                break;
+
+            case INTAKE_ON:
+                if (timer.seconds() >= INTAKEON_TIME) {
+                    shotsRemaining--;
+                    // Stop intake
+                    intake1.setPower(0);
+                    intake2.setPower(0);
+
+
+                    if (shotsRemaining > 0) {
+                        push1.setPosition(pushUp1);
+                        push2.setPosition(pushUp2);
+                        timer.reset();
+                        launchState = LaunchState.PUSH_DOWN;
+                    } else {
+                        launchState = LaunchState.IDLE;
+                    }
+
+                    if (shotsRemaining == 2) {
+                        INTAKEON_TIME = 0.4;
+                    } else {
+                        INTAKEON_TIME = 0.2;
+                    }
+                }
+                break;
+
+            case IDLE:
+            default:
+                break;
+        }
+
+
+        // ======== PUSH TOGGLE (A button on 2) =========
+        prevA2 = currA2;
+        currA2 = gamepad2.a;
+        // Only allow A toggle if not in launch sequence
+        if (launchState == LaunchState.IDLE && currA2 && !prevA2) {
+            pushOn = !pushOn;
+            push1.setPosition(pushOn ? pushUp1 : pushDown1);
+            push2.setPosition(pushOn ? pushUp2 : pushDown2);
+        }
+
+        // ===== INTAKE DIRECTION TOGGLE (Left bumper on 2) =====
+        prevLB2 = currLB2;
+        currLB2 = gamepad2.left_bumper;
+
+        if (currLB2 && !prevLB2) {
+            intakeDirection = !intakeDirection;
+        }
+
+        // ===== TELEMETRY =====
+        // Drive mode indicator
+        telemetry.addData("DRIVE MODE", robot.fieldCentric ? "FIELD-CENTRIC" : "ROBOT-CENTRIC");
+        telemetry.addLine();
+
+        telemetry.addLine("========STATE========");
+        telemetry.addData("Flywheel", shooterOn ? "ON" : "OFF");
+        telemetry.addData("Intake", intakeOn ? "ON" : "OFF");
+        telemetry.addData("Intake Direction", intakeDirection ? "REVERSE" : "FORWARD");
+        telemetry.addData("Push (a)", pushOn ? "Down" : "Up");
+        telemetry.addLine();
+
+        telemetry.addLine("========SHOOTER========");
+        telemetry.addData("Shooter Ready", shooterAtTarget ? "YES" : "NO");
+        telemetry.addData("Fly Up", fly1.getVelocity());
+        telemetry.addData("Fly Down", fly2.getVelocity());
+        telemetry.addData("Power", power);
+        telemetry.addLine();
+
+        telemetry.addLine("===== AUTO ADJUST =====");
+        telemetry.addData("Distance (in)", trigDistance);
+        telemetry.addData("Target Velocity", targetVelocity);
+        telemetry.addData("Target Angle", targetAngle);
+        telemetry.addLine();
+
+        // In telemetry section, add:
+        telemetry.addLine("===== AUTO ALIGN =====");
+        telemetry.addData("Auto Align", autoAlignOn ? "ON" : "OFF");
+        if (result != null && result.isValid()) {
+            telemetry.addData("TX (horiz offset)", result.getTx());
+            telemetry.addData("Rotation Correction", rotationCorrection);
+        }
+        telemetry.addLine();
+
+        telemetry.addLine("========VALUES========");
+        telemetry.addData("Push 1", push1.getPosition());
+        telemetry.addData("Push 2", push2.getPosition());
+        telemetry.addData("Angle", launch.getPosition());
+        telemetry.addData("Intake1", intake1.getPower());
+        telemetry.addData("Intake2", intake2.getPower());
+        telemetry.addLine();
+
+        // Drive motor info
+        // Odometry position (only shown in field-centric mode)
+        if (robot.fieldCentric) {
+            Pose2D pos = robot.getPose();
+            telemetry.addData("Robot X", pos.getX(DistanceUnit.MM));
+            telemetry.addData("Robot Y", pos.getY(DistanceUnit.MM));
+            telemetry.addData("Robot Heading", pos.getHeading(AngleUnit.DEGREES));
+            telemetry.addLine();
+        }
+        telemetry.update();
+    }
+}
