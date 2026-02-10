@@ -46,7 +46,7 @@ public class Flywheel {
     private double targetAngle = 0.5;
     private double targetVelocity = 1000;
 
-    // ================= LIMELIGHT VARIABLES =================
+    // ================= LIMELIGHT VARIABLES ================
     private Limelight3A limelight;
     private static final double LIME_MOUNT_ANGLE = 15.0;
     private static final double LIME_HEIGHT = 13.0;
