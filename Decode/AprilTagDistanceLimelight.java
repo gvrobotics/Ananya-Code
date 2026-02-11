@@ -12,7 +12,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 
 // TeleOp annotation so this shows up on the driver station
-@TeleOp(name = "AprilTag Distance Limelight")
+@TeleOp(name = "AprilTag Distance Limelight", group = "Test")
 public class AprilTagDistanceLimelight extends OpMode {
 
     // Limelight camera object
@@ -51,6 +51,18 @@ public class AprilTagDistanceLimelight extends OpMode {
         // Get the latest vision result from Limelight
         LLResult result = limelight.getLatestResult();
 
+        // ===== DEBUG INFO =====
+        telemetry.addLine("===== DEBUG =====");
+        telemetry.addData("Result is null?", result == null);
+
+        if (result != null) {
+            telemetry.addData("Result is valid?", result.isValid());
+            telemetry.addData("TX", result.getTx());
+            telemetry.addData("TY", result.getTy());
+            telemetry.addData("TA", result.getTa());
+        }
+        telemetry.addLine();
+
         // Check if a valid AprilTag target is detected
         if (result != null && result.isValid()) {
 
@@ -84,19 +96,17 @@ public class AprilTagDistanceLimelight extends OpMode {
                 double y = pose.getPosition().y;
 
                 // Distance = sqrt(x² + y²), converted meters → inches
-                poseDistance = Math.hypot(x, y) * 39.3701;
+                poseDistance = (Math.sqrt(x) + Math.sqrt(y)) * 39.3701;
             }
 
             // ===== Telemetry output to driver station =====
 
+            telemetry.addLine("===== RESULTS =====");
             telemetry.addLine("AprilTag detected!");
             telemetry.addData("Vertical Offset (ty)", ty);
+            telemetry.addData("Angle to target (deg)", angleDeg);
             telemetry.addData("Trig Distance (in)", trigDistance);
-
-            // Only display pose distance if valid
-            if (poseDistance > 0) {
-                telemetry.addData("Pose Distance (in)", poseDistance);
-            }
+            telemetry.addData("Pose Distance (in)", poseDistance);
 
         } else {
             // No AprilTag detected
