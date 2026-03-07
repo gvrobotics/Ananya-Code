@@ -1,14 +1,15 @@
 package org.firstinspires.ftc.teamcode.Tele;
 
+import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
-import com.qualcomm.hardware.limelightvision.Limelight3A;
-import com.qualcomm.hardware.limelightvision.LLResult;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -21,18 +22,22 @@ public class Tele5440 extends OpMode {
     public DcMotorEx fly1, fly2, intake1, intake2;
     public Servo push1, push2, launch;
     GoBildaPinpointDriver odo;
+    VoltageSensor voltage;
 
     private Boolean intakeOn = false, prevLB1 = false, currLB1,
             intakeDirection = false, prevLB2 = false, currLB2,
-            shooterOn = false, prevRB1 = false, currRB1, flywheelRumble = false,
+            shooterOn = false, prevRB1 = false, currRB1,
             pushOn = false, prevA2 = false, currA2,
             prevB = false, currB, prevX = false, currX,
-            prevA = false, currA = false;
+            prevA = false, currA = false,
+            prevDL = false, currDL = false,
+            prevDR = false, currDR = false;
+
     private double pushUp1 = 0.7, pushDown1 = 0.4, pushUp2 = 0.25, pushDown2 = 0;
     private int shotsRemaining = 0;
-    double INTAKEON_TIME = 0.2;
+    double intakePower = 0, INTAKEON_TIME = 0.15, PUSHED_UP_TIME = 0.15, PUSHED_DOWN_TIME = 0.05;
     private boolean autoAlignOn = false;
-    private boolean wasAligned = false;  // NEW: Track alignment state for rumble
+    private boolean wasAligned = false;  // Track alignment state for rumble
     double kP_align = 0.0201; //TODO: ADJUST
 
     // ================= LIMELIGHT VARIABLES =================
@@ -42,22 +47,21 @@ public class Tele5440 extends OpMode {
 
     // ================= LOOKUP TABLE =================
     private final double [] distances = {30, 40, 50, 60, 75, 137, 165, 172};
-    private final double [] angles = {1, 0.7, 0.65, 0.6, 0.35, 0.15, 0.15, 0.1};
+    private final double [] angles = {1, 0.7, 0.65, 0.6, 0.37, 0.15, 0.15, 0.1};
     private final double [] velocities = {820, 860, 880, 900, 1020, 1160, 1220, 1230};
 
     private double targetAngle = 0.5;
     private double targetVelocity = 1000;
 
     // ===== FF + P CONTROL VALUES =====
-    private double kF = 0.00052;
-    private double kP = 0.0026;
+    private double kF = 0.00052,  kP = 0.0026;
 
     // State machine for launch sequence
     private enum LaunchState {
         IDLE,
         PUSH_DOWN,
         PUSH_BACK,
-        INTAKE_ON
+        INTAKE_OFF
     }
 
     private LaunchState launchState = LaunchState.IDLE;
@@ -78,6 +82,7 @@ public class Tele5440 extends OpMode {
         launch = hardwareMap.get(Servo.class, "l");
 
         odo = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
+        voltage = hardwareMap.voltageSensor.iterator().next();
 
         // Set motor directions
         fly1.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -105,7 +110,7 @@ public class Tele5440 extends OpMode {
         intake2.setPower(0);
         push1.setPosition(pushDown1);
         push2.setPosition(pushDown2);
-        launch.setPosition(0.5);
+        launch.setPosition(launch.getPosition());
 
         // ===== Limelight =====
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
@@ -183,9 +188,6 @@ public class Tele5440 extends OpMode {
         currRB1 = gamepad1.right_bumper;
         if (currRB1 && !prevRB1) {
             shooterOn = !shooterOn;
-            if (!shooterOn) {
-                flywheelRumble = false; // reset when turning off
-            }
         }
 
         // ===== FF + P CONTROL LOOP =====
@@ -199,23 +201,12 @@ public class Tele5440 extends OpMode {
                 launch.setPosition(targetAngle);
             }
 
+            // Calculate base power using existing constants
             power = (targetVelocity * kF) + (error * kP);
         }
 
         fly1.setPower(power);
         fly2.setPower(power);
-
-//        // ===== FLYWHEEL RUMBLE =====
-//        if (shooterOn) {
-//            double avgVelocity = (Math.abs(fly1.getVelocity()) + Math.abs(fly2.getVelocity())) / 2.0;
-//
-//            if (!flywheelRumble && avgVelocity >= (targetVelocity)) {
-//                gamepad1.rumbleBlips(2);
-//                flywheelRumble = true;
-//            }
-//        } else {
-//            flywheelRumble = false;
-//        }
 
         // ===== INTAKE TOGGLE (Left Bumper) =====
         prevLB1 = currLB1;
@@ -226,21 +217,25 @@ public class Tele5440 extends OpMode {
 
         // ONLY allow toggle intake when NOT shooting
         if (launchState == LaunchState.IDLE) {
-            double intakePower = 0;
-
+            intakePower = 0;
             if (intakeOn) {
-                intakePower = intakeDirection ? -0.8 : 0.8;
+                double basePower = 0.8;
+                // Scale intake power with voltage (85%)
+                double voltageScale = Math.max(0.85, voltage.getVoltage() / 13);
+                double adjustedPower = basePower * voltageScale;
+
+                intakePower = intakeDirection ? -adjustedPower : adjustedPower;
             }
 
             intake1.setPower(intakePower);
             intake2.setPower(intakePower);
         }
 
-        // ====== LAUNCH SEQUENCE FOR 3 SHOTS (X button) =====
-        prevX = currX;
-        currX = gamepad1.x;
+        // ====== LAUNCH SEQUENCE FOR 3 SHOTS (B button) =====
+        prevB = currB;
+        currB = gamepad1.b;
 
-        if (currX && !prevX && launchState == LaunchState.IDLE) {
+        if (currB && !prevB && launchState == LaunchState.IDLE) {
             shotsRemaining = 3;
 
             // Stop intake
@@ -256,11 +251,11 @@ public class Tele5440 extends OpMode {
             launchState = LaunchState.PUSH_DOWN;
         }
 
-        // ===== LAUNCH SEQUENCE FOR 1 SHOT (B button) =====
-        prevB = currB;
-        currB = gamepad1.b;
-        // Start launch sequence on B tap if IDLE
-        if (currB && !prevB && launchState == LaunchState.IDLE) {
+        // ===== LAUNCH SEQUENCE FOR 1 SHOT (X button) =====
+        prevX = currX;
+        currX = gamepad1.x;
+
+        if (currX && !prevX && launchState == LaunchState.IDLE) {
             shotsRemaining = 1;
             // Stop intake
             intake1.setPower(0);
@@ -280,7 +275,8 @@ public class Tele5440 extends OpMode {
         // Run launch state machine
         switch (launchState) {
             case PUSH_DOWN:
-                if (timer.seconds() >= 0.2) {
+                // if pusher is up for PUSHED_UP_TIME push down transfer
+                if (timer.seconds() >= PUSHED_UP_TIME) {
                     // Pusher down
                     push1.setPosition(pushDown1);
                     push2.setPosition(pushDown2);
@@ -290,37 +286,40 @@ public class Tele5440 extends OpMode {
                 break;
 
             case PUSH_BACK:
-                if (timer.seconds() >= 0.2) {
-                    // Turn intake on
+                // if pusher is down for PUSHED_DOWN_TIME turn on intake
+                if (timer.seconds() >= PUSHED_DOWN_TIME) {
+                    // Turn intake on to load next sample
                     intake1.setPower(0.8);
                     intake2.setPower(0.8);
 
                     timer.reset();
-                    launchState = LaunchState.INTAKE_ON;
+                    launchState = LaunchState.INTAKE_OFF;
                 }
                 break;
 
-            case INTAKE_ON:
+            case INTAKE_OFF:
+                // if intake is on for INTAKEON_TIME turn it off
                 if (timer.seconds() >= INTAKEON_TIME) {
                     shotsRemaining--;
                     // Stop intake
                     intake1.setPower(0);
                     intake2.setPower(0);
 
-
+                    // if more shots remain, rerun launch sequence
                     if (shotsRemaining > 0) {
                         push1.setPosition(pushUp1);
                         push2.setPosition(pushUp2);
                         timer.reset();
                         launchState = LaunchState.PUSH_DOWN;
                     } else {
+                        // FIX: transition back to IDLE instead of PUSH_UP
                         launchState = LaunchState.IDLE;
                     }
 
                     if (shotsRemaining == 2) {
-                        INTAKEON_TIME = 0.4;
+                        INTAKEON_TIME = 0.3;
                     } else {
-                        INTAKEON_TIME = 0.2;
+                        INTAKEON_TIME = 0.15;
                     }
                 }
                 break;
@@ -355,28 +354,28 @@ public class Tele5440 extends OpMode {
         telemetry.addLine();
 
         telemetry.addLine("========STATE========");
+        telemetry.addData("Battery", voltage.getVoltage());
+        if (power >= 1.0 && velocity < (targetVelocity * 0.9)) {
+            // battery is too low to make shots
+            telemetry.addLine("BATTERY IS TOO LOW");
+        }
+
         telemetry.addData("Flywheel", shooterOn ? "ON" : "OFF");
+        telemetry.addData("Shooter Ready", fly1.getVelocity() >= targetVelocity ? "YES" : "NO");
         telemetry.addData("Intake", intakeOn ? "ON" : "OFF");
         telemetry.addData("Intake Direction", intakeDirection ? "REVERSE" : "FORWARD");
         telemetry.addData("Push (a)", pushOn ? "Down" : "Up");
         telemetry.addLine();
 
+        telemetry.addLine("===== AUTO ALIGN =====");
+        telemetry.addData("Auto Align", autoAlignOn ? "ON" : "OFF");
+        telemetry.addData("Aligned", isAligned ? "YES" : "NO");
+        telemetry.addLine();
+
         telemetry.addLine("========SHOOTER========");
-        telemetry.addData("Shooter Ready", flywheelRumble ? "YES" : "NO");
         telemetry.addData("Fly Up", fly1.getVelocity());
         telemetry.addData("Fly Down", fly2.getVelocity());
         telemetry.addData("Power", power);
-        telemetry.addLine();
-
-        // In telemetry section, add:
-        telemetry.addLine("===== AUTO ALIGN =====");
-        telemetry.addData("Auto Align", autoAlignOn ? "ON" : "OFF");
-        telemetry.addData("Aligned", isAligned ? "YES ✓" : "NO");
-        telemetry.addData("kP_align", kP_align);
-        if (result != null && result.isValid()) {
-            telemetry.addData("TX (horiz offset)", result.getTx());
-            telemetry.addData("Rotation Correction", rotationCorrection);
-        }
         telemetry.addLine();
 
         telemetry.addLine("===== AUTO ADJUST =====");
