@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 
-@TeleOp(name = "Shooter FF + P Test", group = "TEST")
+@TeleOp(name = "PIDTuning", group = "TEST")
 public class PIDTuning extends OpMode {
 
     DcMotorEx fly1, fly2;
