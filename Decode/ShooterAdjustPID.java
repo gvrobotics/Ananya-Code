@@ -1,7 +1,7 @@
-package org.firstinspires.ftc.teamcode.Tele;
+package org.firstinspires.ftc.teamcode.Tele.Test;
 
-import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -10,7 +10,9 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-@TeleOp(name = "ShooterAdjustw/PID")
+import org.firstinspires.ftc.teamcode.Tele.Tele5440;
+
+@TeleOp(name = "ShooterAdjustPID", group = "C")
 public class ShooterAdjustPID extends OpMode {
 
     // ===== Hardware =====
@@ -20,14 +22,14 @@ public class ShooterAdjustPID extends OpMode {
 
     // ===== Intake toggle =====
     boolean intakeOn = false;
-    boolean prevLB = false, currLB = false;
+    boolean prevLB1 = false, currLB1 = false;
 
     // ===== Shooter toggle =====
     boolean shooterOn = false;
     boolean prevRB = false;
 
     // ===== B button launch =====
-    double INTAKEON_TIME = 0.2;
+    double INTAKEON_TIME = 0.15, PUSHED_UP_TIME = 0.15, PUSHED_DOWN_TIME = 0.05;
     boolean prevB = false, currB = false;
 
     // ===== D-pad edge detect =====
@@ -42,7 +44,7 @@ public class ShooterAdjustPID extends OpMode {
     double kP = 0.0026;
 
     // ===== Launch state machine =====
-    enum LaunchState { IDLE, PUSH_DOWN, PUSH_BACK, INTAKE_ON }
+    enum LaunchState { IDLE, PUSH_UP, PUSH_DOWN, PUSH_BACK, INTAKE_OFF }
     LaunchState launchState = LaunchState.IDLE;
     ElapsedTime timer = new ElapsedTime();
 
@@ -97,38 +99,17 @@ public class ShooterAdjustPID extends OpMode {
 
     @Override
     public void loop() {
+        // ================= LIMELIGHT DISTANCE =================
+        LLResult result = limelight.getLatestResult();
 
-        // ===== INTAKE TOGGLE (Left Bumper) =====
-        prevLB = currLB;
-        currLB = gamepad1.left_bumper;
-        if (currLB && !prevLB) {
-            intakeOn = !intakeOn;
+        if (result != null && result.isValid()) {
+
+            double ty = result.getTy();
+            double angleRad = Math.toRadians(LIME_MOUNT_ANGLE + ty);
+
+            trigDistance =
+                    (TAG_HEIGHT - LIME_HEIGHT) / Math.tan(angleRad);
         }
-
-        // ONLY allow toggle intake when NOT shooting
-        if (launchState == LaunchState.IDLE) {
-            double intakePower = 0;
-
-            intake1.setPower(intakePower);
-            intake2.setPower(intakePower);
-        }
-
-        // ================= SHOOTER TOGGLE =================
-        boolean currRB = gamepad1.right_bumper;
-        if (currRB && !prevRB) shooterOn = !shooterOn;
-        prevRB = currRB;
-
-        // ===== FF + P CONTROL LOOP =====
-        double velocity = Math.abs(fly1.getVelocity());
-        double error = targetVelocity - velocity;
-
-        double power = 0;
-        if (shooterOn) {
-            power = (targetVelocity * kF) + (error * kP);
-        }
-
-        fly1.setPower(power);
-        fly2.setPower(power);
 
         // ================= VELOCITY ADJUST =================
         boolean currUp = gamepad1.dpad_up;
@@ -147,11 +128,40 @@ public class ShooterAdjustPID extends OpMode {
         if (gamepad1.dpadRightWasPressed())
             launch.setPosition(launch.getPosition() - 0.05);
 
-        // ====== LAUNCH SEQUENCE FOR 3 SHOTS (X button) =====
-        prevX = currX;
-        currX = gamepad1.x;
+        // ===== FF + P CONTROL LOOP =====
+        double velocity = Math.abs(fly1.getVelocity());
+        double error = targetVelocity - velocity;
 
-        if (currX && !prevX && launchState == LaunchState.IDLE) {
+        double power = 0;
+        if (shooterOn) {
+            // Calculate base power using existing constants
+            power = (targetVelocity * kF) + (error * kP);
+        }
+
+        fly1.setPower(power);
+        fly2.setPower(power);
+
+        // ===== INTAKE TOGGLE (Left Bumper) =====
+        prevLB1 = currLB1;
+        currLB1 = gamepad1.left_bumper;
+        if (currLB1 && !prevLB1) {
+            intakeOn = !intakeOn;
+        }
+
+        // ONLY allow toggle intake when NOT shooting
+        if (launchState == LaunchState.IDLE) {
+            double intakePower = 0;
+            if (intakeOn) {
+                intake1.setPower(intakePower);
+                intake2.setPower(intakePower);
+            }
+        }
+
+        // ====== LAUNCH SEQUENCE FOR 3 SHOTS (B button) =====
+        prevB = currB;
+        currB = gamepad1.b;
+
+        if (currB && !prevB && launchState == LaunchState.PUSH_UP) {
             shotsRemaining = 3;
 
             // Stop intake
@@ -167,11 +177,11 @@ public class ShooterAdjustPID extends OpMode {
             launchState = LaunchState.PUSH_DOWN;
         }
 
-        // ===== LAUNCH SEQUENCE FOR 1 SHOT (B button) =====
-        prevB = currB;
-        currB = gamepad1.b;
+        // ===== LAUNCH SEQUENCE FOR 1 SHOT (X button) =====
+        prevX = currX;
+        currX = gamepad1.x;
         // Start launch sequence on B tap if IDLE
-        if (currB && !prevB && launchState == LaunchState.IDLE) {
+        if (currX && !prevX && launchState == LaunchState.PUSH_UP) {
             shotsRemaining = 1;
             // Stop intake
             intake1.setPower(0);
@@ -191,7 +201,8 @@ public class ShooterAdjustPID extends OpMode {
         // Run launch state machine
         switch (launchState) {
             case PUSH_DOWN:
-                if (timer.seconds() >= 0.2) {
+                // if pusher is up for PUSHED_UP_TIME push down transfer
+                if (timer.seconds() >= PUSHED_UP_TIME) {
                     // Pusher down
                     push1.setPosition(pushDown1);
                     push2.setPosition(pushDown2);
@@ -201,56 +212,46 @@ public class ShooterAdjustPID extends OpMode {
                 break;
 
             case PUSH_BACK:
-                if (timer.seconds() >= 0.2) {
-                    // Turn intake on
+                // if pusher is down for PUSHED_DOWN_TIME turn on intake
+                if (timer.seconds() >= PUSHED_DOWN_TIME) {
+                    // Turn intake on to load next sample
                     intake1.setPower(0.8);
                     intake2.setPower(0.8);
 
                     timer.reset();
-                    launchState = LaunchState.INTAKE_ON;
+                    launchState = LaunchState.INTAKE_OFF;
                 }
                 break;
 
-            case INTAKE_ON:
-                if (timer.seconds() >= INTAKEON_TIME) { // change this value depending on the intake timing issues
+            case INTAKE_OFF:
+                // if intake is on for INTAKEON_TIME turn it off
+                if (timer.seconds() >= INTAKEON_TIME) {
                     shotsRemaining--;
                     // Stop intake
                     intake1.setPower(0);
                     intake2.setPower(0);
 
-
+                    // if more artifacts remain, rerun launch automations
                     if (shotsRemaining > 0) {
                         push1.setPosition(pushUp1);
                         push2.setPosition(pushUp2);
                         timer.reset();
                         launchState = LaunchState.PUSH_DOWN;
                     } else {
-                        launchState = LaunchState.IDLE;
+                        launchState = LaunchState.PUSH_UP;
                     }
 
-                    if (shotsRemaining == 2) {
-                        INTAKEON_TIME = 0.4;
-                    } else {
-                        INTAKEON_TIME = 0.2;
-                    }
+//                    if (shotsRemaining == 2) {
+//                        INTAKEON_TIME = 0.3;
+//                    } else {
+//                        INTAKEON_TIME = 0.15;
+//                    }
                 }
                 break;
 
             case IDLE:
             default:
                 break;
-        }
-
-        // ================= LIMELIGHT DISTANCE =================
-        LLResult result = limelight.getLatestResult();
-
-        if (result != null && result.isValid()) {
-
-            double ty = result.getTy();
-            double angleRad = Math.toRadians(LIME_MOUNT_ANGLE + ty);
-
-            trigDistance =
-                    (TAG_HEIGHT - LIME_HEIGHT) / Math.tan(angleRad);
         }
 
         // ================= TELEMETRY =================
